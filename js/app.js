@@ -35,33 +35,18 @@ const app = (function() {
     // INITIALIZATION
     // ==========================================
     function init() {
+        console.log("[Akasya] Init started..."); // <--- ADD THIS
+        
         // Step 1: Initialize Firebase
         const dbReady = DB.init();
+        console.log("[Akasya] DB.init result:", dbReady); // <--- ADD THIS
 
         if (!dbReady) {
+            console.log("[Akasya] DB not ready, showing config screen"); // <--- ADD THIS
             showFirebaseConfigScreen();
             return;
         }
-
-        // Step 2: Set up auth state listener (Promise version)
-        Auth.init().then(firebaseUser => {
-            if (firebaseUser) {
-                // User is logged in - check if active
-                if (Auth.getProfile() && Auth.getProfile().isActive === false) {
-                    showLoginScreen();
-                    showToast('Your account has been deactivated. Contact an admin.', 'error');
-                    return;
-                }
-                setupApp();
-            } else {
-                // Not logged in - check if first-time setup needed
-                checkFirstTimeSetup();
-            }
-        }).catch(err => {
-            console.error("[Akasya] Auth init error:", err);
-            showLoginScreen();
-        });
-    }
+       
     // ==========================================
     // REAL-TIME DATA LISTENERS
     // ==========================================

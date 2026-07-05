@@ -43,8 +43,8 @@ const app = (function() {
             return;
         }
 
-        // CRITICAL FIX: Always set up event listeners immediately on startup 
-        // so that the login and setup forms can process submissions without reloading the page!
+        // CRITICAL FIX: Add this line here so that the form submit listeners 
+        // are attached immediately on startup, preventing native HTML page reloads.
         setupEventListeners();
 
         // Step 2: Set up auth state listener
@@ -68,12 +68,14 @@ const app = (function() {
     }
 
     /**
-     * Called after successful authentication. Sets up the authenticated app state.
+     * Called after successful authentication. Sets up the full app.
      */
     function setupApp() {
         showAppScreen();
         setupRealTimeListeners();
-        // Removed setupEventListeners() from here since it now runs safely at startup
+        
+        // REMOVE setupEventListeners(); from here since it now safely runs inside init()
+        
         updateUserDisplay();
         applyRoleBasedUI();
         navigate('dashboard');

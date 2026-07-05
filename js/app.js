@@ -574,6 +574,26 @@ const app = (function() {
             badge.style.display = totalAlerts > 0 ? 'flex' : 'none';
         }
 
-        const tbody = document.getElementById('dashLowStockTable');
+     const tbody = document.getElementById('dashLowStockTable');
         const lowStockItems = items.filter(i => {
-            const s = getStatus(i
+            const s = getStatus(i);
+            return s === 'Low' || s === 'Critical';
+        });
+
+        // Add this to actually render the rows (example logic)
+        tbody.innerHTML = lowStockItems.map(i => `
+            <tr>
+                <td>${i.name}</td>
+                <td>${getStatus(i)}</td>
+            </tr>
+        `).join('');
+    } // End of renderDashboard
+
+    // IMPORTANT: Make sure you have the public return object at the very end!
+    return {
+        init,
+        navigate,
+        showToast,
+        // ... (include your other exported functions)
+    };
+})();

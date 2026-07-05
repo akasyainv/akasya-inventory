@@ -39,7 +39,7 @@ const firebaseDB = firebase.database();
     // INITIALIZATION
     // ==========================================
     let app = null;
-    let database = null;
+    let rtdb = null;
     let auth = null;
     let _listeners = [];
 
@@ -56,7 +56,7 @@ const firebaseDB = firebase.database();
             } else {
                 app = firebase.apps[0];
             }
-            database = firebase.database();
+            rtdb = firebase.database();
             auth = firebase.auth();
             console.log("[Akasya] Firebase initialized successfully");
             return true;
@@ -66,7 +66,7 @@ const firebaseDB = firebase.database();
         }
     }
 
-    function getDatabase() { return database; }
+    function getDatabase() { return rtdb; }
     function getAuth() { return auth; }
     function isConfigured() { return FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"; }
 
@@ -78,8 +78,8 @@ const firebaseDB = firebase.database();
      * Write data to a path. Returns a Promise.
      */
     function write(path, data) {
-        if (!database) return Promise.reject("Database not initialized");
-        return database.ref(path).set(data)
+        if (!rtdb) return Promise.reject("Database not initialized");
+        return rtdb.ref(path).set(data)
             .then(() => ({ success: true }))
             .catch(err => { console.error(`[DB] Write error at ${path}:`, err); throw err; });
     }
@@ -88,8 +88,8 @@ const firebaseDB = firebase.database();
      * Read data from a path once. Returns a Promise with the value.
      */
     function read(path) {
-        if (!database) return Promise.reject("Database not initialized");
-        return database.ref(path).once('value')
+        if (!rtdb) return Promise.reject("Database not initialized");
+        return rtdb.ref(path).once('value')
             .then(snapshot => snapshot.val())
             .catch(err => { console.error(`[DB] Read error at ${path}:`, err); throw err; });
     }
@@ -98,8 +98,8 @@ const firebaseDB = firebase.database();
      * Push new data (auto-generates key). Returns a Promise with the new key.
      */
     function push(path, data) {
-        if (!database) return Promise.reject("Database not initialized");
-        const ref = database.ref(path).push();
+        if (!rtdb) return Promise.reject("Database not initialized");
+        const ref = rtdb.ref(path).push();
         return ref.set({ ...data, id: ref.key, createdAt: data.createdAt || new Date().toISOString() })
             .then(() => ({ success: true, key: ref.key }))
             .catch(err => { console.error(`[DB] Push error at ${path}:`, err); throw err; });
@@ -109,8 +109,8 @@ const firebaseDB = firebase.database();
      * Update specific fields. Returns a Promise.
      */
     function update(path, data) {
-        if (!database) return Promise.reject("Database not initialized");
-        return database.ref(path).update(data)
+        if (!rtdb) return Promise.reject("Database not initialized");
+        return rtdb.ref(path).update(data)
             .then(() => ({ success: true }))
             .catch(err => { console.error(`[DB] Update error at ${path}:`, err); throw err; });
     }
@@ -119,8 +119,8 @@ const firebaseDB = firebase.database();
      * Remove data at path. Returns a Promise.
      */
     function remove(path) {
-        if (!database) return Promise.reject("Database not initialized");
-        return database.ref(path).remove()
+        if (!rtdb) return Promise.reject("Database not initialized");
+        return rtdb.ref(path).remove()
             .then(() => ({ success: true }))
             .catch(err => { console.error(`[DB] Remove error at ${path}:`, err); throw err; });
     }
@@ -134,8 +134,8 @@ const firebaseDB = firebase.database();
      * Returns an unsubscribe function.
      */
     function listen(path, callback) {
-        if (!database) return function(){};
-        const ref = database.ref(path);
+        if (!rtdb) return function(){};
+        const ref = rtdb.ref(path);
         const handler = snapshot => {
             const val = snapshot.val();
             // Convert object-of-objects to array if needed
@@ -161,8 +161,8 @@ const firebaseDB = firebase.database();
      * Listen to a single object (not array). Returns unsubscribe function.
      */
     function listenOne(path, callback) {
-        if (!database) return function(){};
-        const ref = database.ref(path);
+        if (!rtdb) return function(){};
+        const ref = rtdb.ref(path);
         const handler = snapshot => {
             callback(snapshot.val() || {});
         };

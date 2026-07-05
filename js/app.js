@@ -34,9 +34,6 @@ const app = (function() {
     // ==========================================
     // INITIALIZATION
     // ==========================================
-   // ==========================================
-    // INITIALIZATION
-    // ==========================================
     function init() {
         // Step 1: Initialize Firebase
         const dbReady = DB.init();
@@ -46,8 +43,8 @@ const app = (function() {
             return;
         }
 
-        // Step 2: Set up live auth state listener with a callback
-        Auth.init(firebaseUser => {
+        // Step 2: Set up auth state listener (Promise version)
+        Auth.init().then(firebaseUser => {
             if (firebaseUser) {
                 // User is logged in - check if active
                 if (Auth.getProfile() && Auth.getProfile().isActive === false) {
@@ -60,9 +57,11 @@ const app = (function() {
                 // Not logged in - check if first-time setup needed
                 checkFirstTimeSetup();
             }
+        }).catch(err => {
+            console.error("[Akasya] Auth init error:", err);
+            showLoginScreen();
         });
     }
-
     // ==========================================
     // REAL-TIME DATA LISTENERS
     // ==========================================

@@ -43,8 +43,7 @@ const app = (function() {
             return;
         }
 
-        // CRITICAL FIX: Add this line here so that the form submit listeners 
-        // are attached immediately on startup, preventing native HTML page reloads.
+        // Attached immediately on startup to prevent native HTML page reloads
         setupEventListeners();
 
         // Step 2: Set up auth state listener
@@ -73,9 +72,6 @@ const app = (function() {
     function setupApp() {
         showAppScreen();
         setupRealTimeListeners();
-        
-        // REMOVE setupEventListeners(); from here since it now safely runs inside init()
-        
         updateUserDisplay();
         applyRoleBasedUI();
         navigate('dashboard');
@@ -228,7 +224,6 @@ const app = (function() {
 
         Auth.createFirstAdmin(email, password, displayName)
             .then(() => {
-                // Save initial settings
                 DB.settings.save({
                     businessName: 'Akasya Coffee',
                     warehouseName: 'Main Warehouse',
@@ -256,7 +251,6 @@ const app = (function() {
 
     function handleLogout() {
         showLoading('Signing out...');
-        // Detach all real-time listeners
         DB.detachAllListeners();
         _unsubInventory = null;
         _unsubSuppliers = null;
@@ -294,7 +288,6 @@ const app = (function() {
     function applyRoleBasedUI() {
         const allowedPages = Auth.getAllowedPages();
 
-        // Show/hide nav links based on role
         document.querySelectorAll('.nav-link[data-page]').forEach(link => {
             const page = link.dataset.page;
             if (allowedPages.includes(page)) {
@@ -304,13 +297,11 @@ const app = (function() {
             }
         });
 
-        // Show/hide nav sections that have no visible links
         document.querySelectorAll('.nav-section').forEach(section => {
             const visibleLinks = section.querySelectorAll('.nav-link:not([style*="display: none"])');
             section.style.display = visibleLinks.length > 0 ? '' : 'none';
         });
 
-        // Hide user menu section in nav for non-admins
         const usersLink = document.querySelector('.nav-link[data-page="users"]');
         if (usersLink) {
             usersLink.style.display = Auth.isAdmin() ? '' : 'none';
@@ -321,50 +312,60 @@ const app = (function() {
     // NAVIGATION
     // ==========================================
     function navigate(page) {
-        if (!Auth.getUser()) {
-            showLoginScreen();
+        if (!Auth.canAccessPage(page)) {
+            showToast('You do not have permission to access this page.', 'error');
             return;
         }
 
         currentPage = page;
-        
-        // Update active class on sidebar links
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.classList.toggle('active', link.dataset.page === page);
-        });
 
-        // Hide all pages, show target page
-        document.querySelectorAll('.page-view').forEach(view => {
-            view.style.display = view.id === page + 'Page' ? 'block' : 'none';
-        });
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
 
-        // Close mobile sidebar if open
+        const pageEl = document.getElementById(page + 'Page');
+        if (pageEl) pageEl.classList.add('active');
+
+        const navLink = document.querySelector(`.nav-link[data-page="${page}"]`);
+        if (navLink) navLink.classList.add('active');
+
+        const titles = {
+            dashboard: 'Dashboard',
+            inventory: 'Inventory',
+            receive: 'Receive Stock',
+            transfer: 'Transfer Stock',
+            suppliers: 'Suppliers',
+            branches: 'Branches',
+            recipes: 'Recipe / BOM',
+            reports: 'Reports',
+            settings: 'Settings',
+            users: 'User Management'
+        };
+        const titleEl = document.getElementById('pageTitle');
+        if (titleEl) titleEl.textContent = titles[page] || page;
+
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('active');
 
-        // Trigger module rendering based on active page
-        if (page === 'dashboard') {
-            renderDashboard();
-        } else if (page === 'inventory') {
-            InventoryModule.render();
-        } else if (page === 'suppliers') {
-            SuppliersModule.render();
-        } else if (page === 'recipes') {
-            RecipesModule.render();
-        } else if (page === 'reports') {
-            ReportsModule.render();
-        } else if (page === 'users') {
-            renderUsers();
-        } else if (page === 'settings') {
-            // CRITICAL FIX: Explicitly call render so the form fields populate!
-            SettingsModule.render(); 
+        switch(page) {
+            case 'dashboard': renderDashboard(); break;
+            case 'inventory': InventoryModule.render(); break;
+            case 'receive': renderReceive(); break;
+            case 'transfer': renderTransfer(); break;
+            case 'suppliers': SuppliersModule.render(); break;
+            case 'branches': renderBranches(); break;
+            case 'recipes': RecipesModule.render(); break;
+            case 'reports': ReportsModule.render(); break;
+            case 'settings': SettingsModule.render(); break;
+            case 'users': renderUsers(); break;
         }
+
+        window.scrollTo(0, 0);
     }
+
     // ==========================================
     // EVENT LISTENERS
     // ==========================================
     function setupEventListeners() {
-        // Sidebar toggle
         document.getElementById('menuToggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.add('open');
             document.getElementById('sidebarOverlay').classList.add('active');
@@ -378,7 +379,6 @@ const app = (function() {
             document.getElementById('sidebarOverlay').classList.remove('active');
         });
 
-        // Nav links
         document.querySelectorAll('.nav-link[data-page]').forEach(link => {
             link.addEventListener('click', e => {
                 e.preventDefault();
@@ -386,16 +386,10 @@ const app = (function() {
             });
         });
 
-        // Login form
         document.getElementById('loginForm').addEventListener('submit', handleLogin);
-
-        // Setup form
         document.getElementById('setupForm').addEventListener('submit', handleSetup);
-
-        // Logout
         document.getElementById('logoutBtn').addEventListener('click', handleLogout);
 
-        // Global search
         document.getElementById('globalSearch').addEventListener('input', debounce(e => {
             const val = e.target.value.toLowerCase();
             if (val.length > 2) {
@@ -406,7 +400,6 @@ const app = (function() {
             }
         }, 300));
 
-        // Inventory filters
         document.getElementById('invSearch').addEventListener('input', debounce(e => {
             inventoryFilter.search = e.target.value.toLowerCase();
             inventoryPageNum = 1;
@@ -428,7 +421,6 @@ const app = (function() {
             InventoryModule.render();
         });
 
-        // Inventory sort
         document.querySelectorAll('#inventoryTable thead th.sortable').forEach(th => {
             th.addEventListener('click', () => {
                 const field = th.dataset.sort;
@@ -446,32 +438,37 @@ const app = (function() {
             });
         });
 
-        // Receive form
-        document.getElementById('receiveForm').addEventListener('submit', e => {
-            e.preventDefault();
-            InventoryModule.submitReceive();
-        });
+        // SAFELY LOOK FOR FORMS ONLY IF THEY EXIST IN HTML
+        const receiveForm = document.getElementById('receiveForm');
+        if (receiveForm) {
+            receiveForm.addEventListener('submit', e => {
+                e.preventDefault();
+                InventoryModule.submitReceive();
+            });
+        }
 
-        // Transfer form
-        document.getElementById('transferForm').addEventListener('submit', e => {
-            e.preventDefault();
-            InventoryModule.submitTransfer();
-        });
+        const transferForm = document.getElementById('transferForm');
+        if (transferForm) {
+            transferForm.addEventListener('submit', e => {
+                e.preventDefault();
+                InventoryModule.submitTransfer();
+            });
+        }
 
-        // Adjustment form
-        document.getElementById('adjustForm').addEventListener('submit', e => {
-            e.preventDefault();
-            InventoryModule.submitAdjustment();
-        });
+        const adjustForm = document.getElementById('adjustForm');
+        if (adjustForm) {
+            adjustForm.addEventListener('submit', e => {
+                e.preventDefault();
+                InventoryModule.submitAdjustment();
+            });
+        }
 
-        document.getElementById('adjustItem').addEventListener('change', () => {
-            InventoryModule.updateAdjustCurrentQty();
-        });
-        document.getElementById('adjustLocation').addEventListener('change', () => {
-            InventoryModule.updateAdjustCurrentQty();
-        });
+        const adjustItem = document.getElementById('adjustItem');
+        if (adjustItem) adjustItem.addEventListener('change', () => InventoryModule.updateAdjustCurrentQty());
+        
+        const adjustLocation = document.getElementById('adjustLocation');
+        if (adjustLocation) adjustLocation.addEventListener('change', () => InventoryModule.updateAdjustCurrentQty());
 
-        // Transfer tabs
         document.querySelectorAll('.transfer-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.transfer-tab').forEach(t => t.classList.remove('active'));
@@ -484,7 +481,6 @@ const app = (function() {
             });
         });
 
-        // Report tabs
         document.querySelectorAll('.report-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
@@ -497,27 +493,26 @@ const app = (function() {
             });
         });
 
-        // Report transaction filters
-        document.getElementById('reportTransType').addEventListener('change', () => ReportsModule.renderTransactions());
-        document.getElementById('reportTransFrom').addEventListener('change', () => ReportsModule.renderTransactions());
-        document.getElementById('reportTransTo').addEventListener('change', () => ReportsModule.renderTransactions());
+        const rType = document.getElementById('reportTransType');
+        if (rType) rType.addEventListener('change', () => ReportsModule.renderTransactions());
+        const rFrom = document.getElementById('reportTransFrom');
+        if (rFrom) rFrom.addEventListener('change', () => ReportsModule.renderTransactions());
+        const rTo = document.getElementById('reportTransTo');
+        if (rTo) rTo.addEventListener('change', () => ReportsModule.renderTransactions());
 
-        // Transfer history filters
-        document.getElementById('transferFromFilter').addEventListener('change', () => renderTransferHistory());
-        document.getElementById('transferToFilter').addEventListener('change', () => renderTransferHistory());
-        document.getElementById('transferDateFilter').addEventListener('change', () => renderTransferHistory());
+        const tFrom = document.getElementById('transferFromFilter');
+        if (tFrom) tFrom.addEventListener('change', () => renderTransferHistory());
+        const tTo = document.getElementById('transferToFilter');
+        if (tTo) tTo.addEventListener('change', () => renderTransferHistory());
+        const tDate = document.getElementById('transferDateFilter');
+        if (tDate) tDate.addEventListener('change', () => renderTransferHistory());
 
-        // Supplier search
-        document.getElementById('supplierSearch').addEventListener('input', debounce(e => {
-            SuppliersModule.render(e.target.value.toLowerCase());
-        }, 200));
+        const sSearch = document.getElementById('supplierSearch');
+        if (sSearch) sSearch.addEventListener('input', debounce(e => SuppliersModule.render(e.target.value.toLowerCase()), 200));
 
-        // Recipe search
-        document.getElementById('recipeSearch').addEventListener('input', debounce(e => {
-            RecipesModule.render(e.target.value.toLowerCase());
-        }, 200));
+        const recSearch = document.getElementById('recipeSearch');
+        if (recSearch) recSearch.addEventListener('input', debounce(e => RecipesModule.render(e.target.value.toLowerCase()), 200));
 
-        // Close modals on overlay click
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', e => {
                 if (e.target === overlay) {
@@ -527,12 +522,9 @@ const app = (function() {
             });
         });
 
-        // Close modals on Escape key
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
-                document.querySelectorAll('.modal-overlay.active').forEach(m => {
-                    m.classList.remove('active');
-                });
+                document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
                 document.body.style.overflow = '';
             }
         });
@@ -545,7 +537,6 @@ const app = (function() {
         const items = _inventoryData;
         const transactions = _transactionsData;
 
-        // Stats calculations
         let inventoryValue = 0;
         let lowStock = 0;
         let criticalStock = 0;
@@ -560,7 +551,6 @@ const app = (function() {
         const today = todayStr();
         const todayTxs = transactions.filter(t => t.date === today);
 
-        // Update stat cards
         document.getElementById('dashInventoryValue').textContent = formatCurrency(inventoryValue);
         document.getElementById('dashTotalProducts').textContent = items.length;
         document.getElementById('dashLowStock').textContent = lowStock;
@@ -568,594 +558,13 @@ const app = (function() {
         document.getElementById('dashTodayTransactions').textContent = todayTxs.length;
         document.getElementById('dashPendingTransfers').textContent = transactions.filter(t => t.type === 'Transfer' && t.date === today).length;
 
-        // Notification badge
         const totalAlerts = lowStock + criticalStock;
         const badge = document.getElementById('notifBadge');
-        badge.textContent = totalAlerts;
-        badge.style.display = totalAlerts > 0 ? 'flex' : 'none';
-
-        // Low stock table (no SKU column)
-        const lowStockItems = items.filter(i => {
-            const s = getStatus(i);
-            return s === 'Low' || s === 'Critical';
-        }).slice(0, 8);
+        if (badge) {
+            badge.textContent = totalAlerts;
+            badge.style.display = totalAlerts > 0 ? 'flex' : 'none';
+        }
 
         const tbody = document.getElementById('dashLowStockTable');
-        if (lowStockItems.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No low stock items</p></td></tr>';
-        } else {
-            tbody.innerHTML = lowStockItems.map(item => {
-                const status = getStatus(item);
-                const statusClass = status === 'Critical' ? 'badge-critical' : 'badge-low';
-                return `<tr>
-                    <td><span class="item-name-text">${escapeHtml(item.name)}</span></td>
-                    <td class="text-right">${item.qtyWarehouse || 0}</td>
-                    <td class="text-right">${item.qtyBamban || 0}</td>
-                    <td class="text-right">${item.qtyCapas || 0}</td>
-                    <td><span class="badge-status ${statusClass}">${status}</span></td>
-                </tr>`;
-            }).join('');
-        }
-
-        // Recent activity
-        const recentTxs = transactions.slice(0, 12);
-        const activityList = document.getElementById('dashActivityList');
-        if (recentTxs.length === 0) {
-            activityList.innerHTML = '<div class="empty-state"><p>No recent activity</p></div>';
-        } else {
-            activityList.innerHTML = recentTxs.map(tx => {
-                let iconBg, iconColor, actionText;
-                switch(tx.type) {
-                    case 'Receive':
-                        iconBg = 'rgba(76,175,80,0.1)'; iconColor = 'var(--success)';
-                        actionText = `Received <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong>`;
-                        break;
-                    case 'Transfer':
-                        iconBg = 'rgba(33,150,243,0.1)'; iconColor = 'var(--info)';
-                        actionText = `Transferred <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong> from ${tx.from} to ${tx.to}`;
-                        break;
-                    case 'Damage':
-                        iconBg = 'rgba(217,83,79,0.1)'; iconColor = 'var(--danger)';
-                        actionText = `Recorded <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> damaged <strong>${escapeHtml(tx.itemName)}</strong>`;
-                        break;
-                    case 'Expired':
-                        iconBg = 'rgba(244,168,37,0.1)'; iconColor = 'var(--warning)';
-                        actionText = `Recorded <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> expired <strong>${escapeHtml(tx.itemName)}</strong>`;
-                        break;
-                    case 'Adjustment':
-                        iconBg = 'rgba(196,106,43,0.1)'; iconColor = 'var(--primary)';
-                        actionText = `Adjusted <strong>${escapeHtml(tx.itemName)}</strong> by ${tx.qty}`;
-                        break;
-                    default:
-                        iconBg = 'rgba(104,119,91,0.1)'; iconColor = 'var(--secondary)';
-                        actionText = `${tx.type} <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong>`;
-                }
-                const icons = {
-                    Receive: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>',
-                    Transfer: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>',
-                    Damage: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
-                    Expired: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
-                    Adjustment: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>'
-                };
-                return `<div class="activity-item">
-                    <div class="activity-icon" style="background: ${iconBg}; color: ${iconColor};">${icons[tx.type] || icons.Adjustment}</div>
-                    <div class="activity-content">
-                        <div class="activity-text">${actionText}</div>
-                        <div class="activity-meta">
-                            <span>${formatDate(tx.date)}</span>
-                            <span>&bull;</span>
-                            <span>${tx.time || ''}</span>
-                            <span>&bull;</span>
-                            <span>${escapeHtml(tx.user || 'System')}</span>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        // Branch summary
-        let wTotal = 0, bTotal = 0, cTotal = 0;
-        let wVal = 0, bVal = 0, cVal = 0;
-        items.forEach(item => {
-            wTotal += item.qtyWarehouse || 0;
-            bTotal += item.qtyBamban || 0;
-            cTotal += item.qtyCapas || 0;
-            wVal += (item.qtyWarehouse || 0) * (item.cost || 0);
-            bVal += (item.qtyBamban || 0) * (item.cost || 0);
-            cVal += (item.qtyCapas || 0) * (item.cost || 0);
-        });
-
-        const settings = _settingsData;
-        const whName = settings.warehouseName || 'Warehouse';
-
-        document.getElementById('dashBranchSummary').innerHTML = `
-            <div class="branch-sum-item">
-                <span class="branch-sum-name">${escapeHtml(whName)}</span>
-                <div class="branch-sum-stats">
-                    <span><strong>${wTotal}</strong> items</span>
-                    <span><strong>${formatCurrency(wVal)}</strong></span>
-                </div>
-            </div>
-            <div class="branch-sum-item">
-                <span class="branch-sum-name">Bamban Branch</span>
-                <div class="branch-sum-stats">
-                    <span><strong>${bTotal}</strong> items</span>
-                    <span><strong>${formatCurrency(bVal)}</strong></span>
-                </div>
-            </div>
-            <div class="branch-sum-item">
-                <span class="branch-sum-name">Capas Branch</span>
-                <div class="branch-sum-stats">
-                    <span><strong>${cTotal}</strong> items</span>
-                    <span><strong>${formatCurrency(cVal)}</strong></span>
-                </div>
-            </div>
-        `;
-    }
-
-    // ==========================================
-    // RECEIVE STOCK PAGE
-    // ==========================================
-    function renderReceive() {
-        updateRefNumbers();
-        document.getElementById('receiveDate').value = todayStr();
-        InventoryModule.populateDropdowns();
-        renderRecentDeliveries();
-    }
-
-    function renderRecentDeliveries() {
-        const transactions = _transactionsData;
-        const receives = transactions.filter(t => t.type === 'Receive').slice(0, 10);
-        const tbody = document.getElementById('recentDeliveriesTable');
-        if (receives.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>No recent deliveries</p></td></tr>';
-        } else {
-            tbody.innerHTML = receives.map(tx => `<tr>
-                <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
-                <td>${formatDate(tx.date)}</td>
-                <td>${escapeHtml(tx.supplierName || '-')}</td>
-                <td>${escapeHtml(tx.itemName)}</td>
-                <td class="text-right">${tx.qty}</td>
-                <td>${escapeHtml(tx.to || '-')}</td>
-                <td>${escapeHtml(tx.user || 'System')}</td>
-            </tr>`).join('');
-        }
-    }
-
-    // ==========================================
-    // TRANSFER STOCK PAGE
-    // ==========================================
-    function renderTransfer() {
-        updateRefNumbers();
-        document.getElementById('transferDate').value = todayStr();
-        document.getElementById('adjustDate').value = todayStr();
-        InventoryModule.populateTransferDropdowns();
-        renderTransferHistory();
-    }
-
-    function renderTransferHistory() {
-        let transactions = _transactionsData.filter(t => t.type === 'Transfer');
-
-        const fromFilter = document.getElementById('transferFromFilter').value;
-        const toFilter = document.getElementById('transferToFilter').value;
-        const dateFilter = document.getElementById('transferDateFilter').value;
-
-        if (fromFilter) transactions = transactions.filter(t => t.from === fromFilter);
-        if (toFilter) transactions = transactions.filter(t => t.to === toFilter);
-        if (dateFilter) transactions = transactions.filter(t => t.date === dateFilter);
-
-        const tbody = document.getElementById('transferHistoryTable');
-        if (transactions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>No transfer records</p></td></tr>';
-        } else {
-            tbody.innerHTML = transactions.slice(0, 50).map(tx => `<tr>
-                <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
-                <td>${formatDate(tx.date)}</td>
-                <td>${escapeHtml(tx.from)}</td>
-                <td>${escapeHtml(tx.to)}</td>
-                <td>${escapeHtml(tx.itemName)}</td>
-                <td class="text-right">${tx.qty}</td>
-                <td><span class="badge-status badge-completed">Completed</span></td>
-                <td>${escapeHtml(tx.user || 'System')}</td>
-            </tr>`).join('');
-        }
-    }
-
-    // ==========================================
-    // BRANCHES PAGE
-    // ==========================================
-    function renderBranches() {
-        const items = _inventoryData;
-        const transactions = _transactionsData;
-        const settings = _settingsData;
-        const whName = settings.warehouseName || 'Main Warehouse';
-
-        const branches = [
-            { key: 'Warehouse', name: whName, color: '#C46A2B', qtyKey: 'qtyWarehouse' },
-            { key: 'Bamban', name: 'Bamban Branch', color: '#68775B', qtyKey: 'qtyBamban' },
-            { key: 'Capas', name: 'Capas Branch', color: '#5A4636', qtyKey: 'qtyCapas' }
-        ];
-
-        document.getElementById('branchesGrid').innerHTML = branches.map(b => {
-            let totalItems = 0, totalQty = 0, totalValue = 0, lowStock = 0;
-            items.forEach(item => {
-                const qty = item[b.qtyKey] || 0;
-                if (qty > 0) totalItems++;
-                totalQty += qty;
-                totalValue += qty * (item.cost || 0);
-                if (qty <= (item.reorderLevel || 10)) lowStock++;
-            });
-
-            const recentTxs = transactions.filter(t =>
-                (t.from === b.key || t.to === b.key)
-            ).slice(0, 5);
-
-            return `<div class="branch-card">
-                <div class="branch-card-header">
-                    <div class="branch-card-icon" style="background: ${b.color}15; color: ${b.color};">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                    </div>
-                    <div>
-                        <div class="branch-card-title">${b.name}</div>
-                        <div class="branch-card-subtitle">${totalItems} items in stock</div>
-                    </div>
-                </div>
-                <div class="branch-card-body">
-                    <div class="branch-stat-row">
-                        <span class="branch-stat-label">Total Quantity</span>
-                        <span class="branch-stat-value">${totalQty.toLocaleString()}</span>
-                    </div>
-                    <div class="branch-stat-row">
-                        <span class="branch-stat-label">Inventory Value</span>
-                        <span class="branch-stat-value">${formatCurrency(totalValue)}</span>
-                    </div>
-                    <div class="branch-stat-row">
-                        <span class="branch-stat-label">Low Stock Items</span>
-                        <span class="branch-stat-value" style="color: ${lowStock > 0 ? 'var(--danger)' : 'var(--success)'}">${lowStock}</span>
-                    </div>
-                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light);">
-                        <div style="font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Recent Transactions</div>
-                        ${recentTxs.length === 0 ? '<span style="font-size: 12px; color: var(--text-muted);">No recent activity</span>' :
-                            recentTxs.map(tx => `<div style="font-size: 12px; color: var(--text); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                                <span>${escapeHtml(tx.itemName)} - ${tx.qty} ${tx.unit || ''}</span>
-                                <span style="color: var(--text-muted);">${formatDate(tx.date)}</span>
-                            </div>`).join('')}
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-
-        // Branch comparison table (no SKU)
-        document.getElementById('branchComparisonTable').innerHTML = items.map(item => {
-            const total = (item.qtyWarehouse || 0) + (item.qtyBamban || 0) + (item.qtyCapas || 0);
-            return `<tr>
-                <td><strong>${escapeHtml(item.name)}</strong></td>
-                <td class="text-right">${item.qtyWarehouse || 0}</td>
-                <td class="text-right">${item.qtyBamban || 0}</td>
-                <td class="text-right">${item.qtyCapas || 0}</td>
-                <td class="text-right"><strong>${total}</strong></td>
-            </tr>`;
-        }).join('');
-    }
-
-    // ==========================================
-    // USER MANAGEMENT (Admin only)
-    // ==========================================
-    function renderUsers() {
-        if (!Auth.isAdmin()) {
-            navigate('dashboard');
-            return;
-        }
-
-        DB.users.getAll(users => {
-            const container = document.getElementById('usersTableBody');
-            if (!users || users.length === 0) {
-                container.innerHTML = '<tr><td colspan="6" class="empty-state"><p>No users found</p></td></tr>';
-                return;
-            }
-
-            container.innerHTML = users.map(u => {
-                const roleClass = u.role === 'admin' ? 'badge-critical' : u.role === 'staff' ? 'badge-healthy' : 'badge-pending';
-                const statusClass = u.isActive === false ? 'badge-critical' : 'badge-healthy';
-                const isCurrentUser = u.uid === Auth.getUser()?.uid;
-                return `<tr>
-                    <td><strong>${escapeHtml(u.displayName || 'Unknown')}</strong>${isCurrentUser ? ' <span style="font-size:10px;color:var(--primary)">(You)</span>' : ''}</td>
-                    <td>${escapeHtml(u.email || '-')}</td>
-                    <td><span class="badge-status ${roleClass}">${escapeHtml((u.role || 'viewer').charAt(0).toUpperCase() + (u.role || 'viewer').slice(1))}</span></td>
-                    <td><span class="badge-status ${statusClass}">${u.isActive === false ? 'Inactive' : 'Active'}</span></td>
-                    <td>${u.createdAt ? formatDate(u.createdAt.split('T')[0]) : '-'}</td>
-                    <td>
-                        <div class="table-actions">
-                            ${!isCurrentUser ? `
-                            <select class="filter-select" onchange="app.changeUserRole('${u.uid}', this.value)" style="min-width:100px;font-size:12px;">
-                                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
-                                <option value="staff" ${u.role === 'staff' ? 'selected' : ''}>Staff</option>
-                                <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer</option>
-                            </select>
-                            <button class="btn btn-sm ${u.isActive === false ? 'btn-success' : 'btn-danger'}" onclick="app.toggleUserActive('${u.uid}', ${u.isActive !== false})" style="padding:4px 10px;font-size:11px;">
-                                ${u.isActive === false ? 'Activate' : 'Deactivate'}
-                            </button>` : '<span style="color:var(--text-muted);font-size:12px;">Cannot modify own account</span>'}
-                        </div>
-                    </td>
-                </tr>`;
-            }).join('');
-        });
-    }
-
-    function changeUserRole(uid, newRole) {
-        if (!Auth.isAdmin()) return;
-        if (uid === Auth.getUser()?.uid) {
-            showToast('You cannot change your own role.', 'error');
-            return;
-        }
-        Auth.updateUserRole(uid, newRole).then(() => {
-            showToast('User role updated', 'success');
-        }).catch(err => {
-            showToast('Failed to update role: ' + err.message, 'error');
-        });
-    }
-
-    function toggleUserActive(uid, currentlyActive) {
-        if (!Auth.isAdmin()) return;
-        if (uid === Auth.getUser()?.uid) {
-            showToast('You cannot deactivate your own account.', 'error');
-            return;
-        }
-        const action = currentlyActive ? 'deactivate' : 'activate';
-        const method = currentlyActive ? Auth.deactivateUser : Auth.activateUser;
-        if (confirm(`Are you sure you want to ${action} this user?`)) {
-            method.call(Auth, uid).then(() => {
-                showToast(`User ${action}d`, 'success');
-                renderUsers();
-            }).catch(err => {
-                showToast('Failed: ' + err.message, 'error');
-            });
-        }
-    } 
-
-   // =========================================================
-    // USER CREATION FUNCTION
-    // =========================================================
-    function createUser() {
-        const name = document.getElementById('newUserName').value.trim();
-        const email = document.getElementById('newUserEmail').value.trim();
-        const password = document.getElementById('newUserPassword').value;
-        const role = document.getElementById('newUserRole').value;
-        
-        if (password.length < 6) {
-            showToast('Password must be at least 6 characters long', 'error');
-            return;
-        }
-
-        // Uses a secondary instance config profile to prevent your current Admin browser from being logged out!
-        const secondaryApp = firebase.initializeApp(firebase.app().options, "SecondaryRegistrationInstance");
-
-        secondaryApp.auth().createUserWithEmailAndPassword(email, password)
-            .then((userCredential) => {
-                const uid = userCredential.user.uid;
-                
-                // Matches your table view model perfectly (displayName & createdAt)
-                return firebase.database().ref('users/' + uid).set({
-                    uid: uid,
-                    displayName: name,
-                    email: email,
-                    role: role,
-                    isActive: true,
-                    createdAt: new Date().toISOString()
-                });
-            })
-            .then(() => {
-                showToast('User created successfully!', 'success');
-                
-                document.getElementById('addUserModal').style.display = 'none';
-                document.getElementById('createNewUserForm').reset();
-                
-                renderUsers(); // Refresh your table automatically
-                secondaryApp.delete(); // Unload secondary instance cleanly
-            })
-            .catch((error) => {
-                console.error("[Akasya Administration Error]:", error);
-                showToast(error.message, 'error');
-                secondaryApp.delete();
-            });
-    }
-    
-    // ==========================================
-    // UTILITIES
-    // ==========================================
-    function genId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    }
-
-    function genRefNum(type) {
-        const prefix = { Receive: 'RCV', Transfer: 'TRF', Damage: 'DMG', Expired: 'EXP', Adjustment: 'ADJ', Return: 'RET' };
-        return (prefix[type] || 'TXN') + '-' + Date.now().toString(36).toUpperCase().slice(-6);
-    }
-
-    function formatDate(dateStr) {
-        if (!dateStr) return '';
-        const d = new Date(dateStr + 'T00:00:00');
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-
-    function formatCurrency(val) {
-        const settings = _settingsData;
-        const sym = settings.currency || '\u20B1';
-        return sym + parseFloat(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    function todayStr() {
-        return new Date().toISOString().split('T')[0];
-    }
-
-    function nowTimeStr() {
-        const d = new Date();
-        return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    }
-
-    function getStatus(item) {
-        const total = (item.qtyWarehouse || 0) + (item.qtyBamban || 0) + (item.qtyCapas || 0);
-        const reorder = item.reorderLevel || 10;
-        if (total <= reorder * 0.5) return 'Critical';
-        if (total <= reorder) return 'Low';
-        return 'Healthy';
-    }
-
-    function getSupplierName(id) {
-        const s = _suppliersData.find(s => s.id === id || s._key === id);
-        return s ? s.name : id;
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-
-    function debounce(fn, ms) {
-        let timer;
-        return function(...args) {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), ms);
-        };
-    }
-
-    // ==========================================
-    // UI HELPERS
-    // ==========================================
-    function openModal(id) {
-        document.getElementById(id).classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-
-    function closeModal(id) {
-        document.getElementById(id).classList.remove('active');
-        document.body.style.overflow = '';
-    }
-
-    function showToast(message, type) {
-        const container = document.getElementById('toastContainer');
-        const icons = {
-            success: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
-            error: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
-            warning: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>'
-        };
-        const titles = { success: 'Success', error: 'Error', warning: 'Warning' };
-
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.setAttribute('role', 'alert');
-        toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-        toast.innerHTML = `
-            <div class="toast-icon">${icons[type]}</div>
-            <div class="toast-content">
-                <div class="toast-title">${titles[type]}</div>
-                <div class="toast-message">${escapeHtml(message)}</div>
-            </div>
-            <button class="toast-close" aria-label="Close notification" onclick="this.parentElement.remove()">&times;</button>
-        `;
-        container.appendChild(toast);
-        setTimeout(() => {
-            toast.classList.add('hiding');
-            setTimeout(() => toast.remove(), 300);
-        }, 4000);
-    }
-
-    function showLoading(message) {
-        const overlay = document.getElementById('loadingOverlay');
-        const msgEl = document.getElementById('loadingMessage');
-        if (msgEl && message) msgEl.textContent = message;
-        overlay.classList.add('active');
-    }
-
-    function hideLoading() {
-        document.getElementById('loadingOverlay').classList.remove('active');
-    }
-
-    function updateRefNumbers() {
-        const receiveRef = document.getElementById('receiveRef');
-        if (receiveRef) receiveRef.value = genRefNum('Receive');
-        const transferRef = document.getElementById('transferRef');
-        if (transferRef) transferRef.value = genRefNum('Transfer');
-        const adjustRef = document.getElementById('adjustRef');
-        if (adjustRef) adjustRef.value = genRefNum('Adjustment');
-    }
-
-    function applyTheme(theme) {
-        if (theme === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
-    }
-
-    function downloadCSV(headers, rows, filename) {
-        const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-    }
-
-    // ==========================================
-    // DATA ACCESSORS (for other modules)
-    // ==========================================
-    function getInventoryData() { return _inventoryData; }
-    function getSuppliersData() { return _suppliersData; }
-    function getTransactionsData() { return _transactionsData; }
-    function getRecipesData() { return _recipesData; }
-    function getSettingsData() { return _settingsData; }
-    function getInventorySort() { return inventorySort; }
-    function getInventoryFilter() { return inventoryFilter; }
-    function getInventoryPageNum() { return inventoryPageNum; }
-    function setInventoryPageNum(p) { inventoryPageNum = p; }
-    function getInventoryPerPage() { return inventoryPerPage; }
-
-    // ==========================================
-    // PUBLIC API
-    // ==========================================
-    return {
-        init: init,
-        navigate: navigate,
-        showToast: showToast,
-        openModal: openModal,
-        closeModal: closeModal,
-        showLoading: showLoading,
-        hideLoading: hideLoading,
-        genId: genId,
-        genRefNum: genRefNum,
-        formatDate: formatDate,
-        formatCurrency: formatCurrency,
-        todayStr: todayStr,
-        nowTimeStr: nowTimeStr,
-        getStatus: getStatus,
-        getSupplierName: getSupplierName,
-        escapeHtml: escapeHtml,
-        debounce: debounce,
-        downloadCSV: downloadCSV,
-        getInventoryData: getInventoryData,
-        getSuppliersData: getSuppliersData,
-        getTransactionsData: getTransactionsData,
-        getRecipesData: getRecipesData,
-        getSettingsData: getSettingsData,
-        getInventorySort: getInventorySort,
-        getInventoryFilter: getInventoryFilter,
-        getInventoryPageNum: getInventoryPageNum,
-        setInventoryPageNum: setInventoryPageNum,
-        getInventoryPerPage: getInventoryPerPage,
-        renderReceive: renderReceive,
-        renderRecentDeliveries: renderRecentDeliveries,
-        renderTransfer: renderTransfer,
-        renderTransferHistory: renderTransferHistory,
-        updateRefNumbers: updateRefNumbers,
-        changeUserRole: changeUserRole,
-        toggleUserActive: toggleUserActive,
-        renderUsers: renderUsers,
-        createUser: createUser
-    };
-})();
-
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', app.init);
+        const lowStockItems = items.filter(i => {
+            const s = getStatus(i

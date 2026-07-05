@@ -929,28 +929,10 @@ const app = (function() {
                 showToast('Failed: ' + err.message, 'error');
             });
         }
-    }
+    } 
 
-   function toggleUserActive(uid, currentlyActive) {
-        if (!Auth.isAdmin()) return;
-        if (uid === Auth.getUser()?.uid) {
-            showToast('You cannot deactivate your own account.', 'error');
-            return;
-        }
-        const action = currentlyActive ? 'deactivate' : 'activate';
-        const method = currentlyActive ? Auth.deactivateUser : Auth.activateUser;
-        if (confirm(`Are you sure you want to ${action} this user?`)) {
-            method.call(Auth, uid).then(() => {
-                showToast(`User ${action}d`, 'success');
-                renderUsers();
-            }).catch(err => {
-                showToast('Failed: ' + err.message, 'error');
-            });
-        }
-    } // <--- This is your existing closing bracket
-
-    // =========================================================
-    // PASTE THE NEW FUNCTION DIRECTLY HERE:
+   // =========================================================
+    // USER CREATION FUNCTION
     // =========================================================
     function createUser() {
         const name = document.getElementById('newUserName').value.trim();
@@ -995,7 +977,7 @@ const app = (function() {
                 secondaryApp.delete();
             });
     }
-
+    
     // ==========================================
     // UTILITIES
     // ==========================================

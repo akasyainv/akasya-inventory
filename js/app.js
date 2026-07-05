@@ -599,6 +599,19 @@ const app = (function() {
         }
     }
 
+    // --- ENSURE THIS FUNCTION EXISTS ---
+    function showToast(message, type) {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <div class="toast-content">${escapeHtml(message)}</div>
+            <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
+
     // ==========================================
     // PUBLIC API
     // ==========================================
@@ -643,5 +656,4 @@ const app = (function() {
     };
 })();
 
-// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', app.init);

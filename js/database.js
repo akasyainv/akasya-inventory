@@ -22,7 +22,6 @@ const DB = (function() {
     // ==========================================
     const FIREBASE_CONFIG = {
         apiKey: "AIzaSyCIxN3KpGcHUwS_k0BfrKXjIX5vYQEuul0",
-        authDomain: "akasya-coffee.firebaseapp.com",
         databaseURL: "https://akasya-coffee-default-rtdb.asia-southeast1.firebasedatabase.app",
         projectId: "akasya-coffee",
         storageBucket: "akasya-coffee.firebasestorage.app",

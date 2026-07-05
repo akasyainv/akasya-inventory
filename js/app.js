@@ -34,6 +34,8 @@ const app = (function() {
     // ==========================================
     // INITIALIZATION
     // ==========================================
+    let _hasCheckedSetup = false; // Flag to prevent infinite login UI looping
+
     function init() {
         // Step 1: Initialize Firebase
         const dbReady = DB.init();
@@ -54,8 +56,13 @@ const app = (function() {
                 }
                 setupApp();
             } else {
-                // Not logged in - check if first-time setup needed
-                checkFirstTimeSetup();
+                // Only run setup check ONCE per session lifecycle to prevent UI loops
+                if (!_hasCheckedSetup) {
+                    _hasCheckedSetup = true;
+                    checkFirstTimeSetup();
+                } else {
+                    showLoginScreen();
+                }
             }
         }).catch(err => {
             console.error("[Akasya] Auth init error:", err);
@@ -74,21 +81,10 @@ const app = (function() {
             } else {
                 showSetupScreen();
             }
-        }).catch(() => {
+        }).catch((err) => {
+            console.warn("[Akasya] Database check failed, defaulting to Login screen directly:", err);
             showLoginScreen();
         });
-    }
-
-    /**
-     * Called after successful authentication. Sets up the full app.
-     */
-    function setupApp() {
-        showAppScreen();
-        setupRealTimeListeners();
-        setupEventListeners();
-        updateUserDisplay();
-        applyRoleBasedUI();
-        navigate('dashboard');
     }
 
     // ==========================================

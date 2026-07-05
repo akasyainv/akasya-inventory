@@ -312,6 +312,8 @@ const app = (function() {
     // NAVIGATION
     // ==========================================
     function navigate(page) {
+        console.log("Attempting to navigate to:", page); // DEBUG
+        
         if (!Auth.canAccessPage(page)) {
             showToast('You do not have permission to access this page.', 'error');
             return;
@@ -319,39 +321,40 @@ const app = (function() {
 
         currentPage = page;
 
-        // Hide all pages, remove active classes
+        // 1. Reset all pages and nav links
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
 
-        // Show target page
-        const pageEl = document.getElementById(page + 'Page');
-        if (pageEl) pageEl.classList.add('active');
-
-        // Set active link
+        // 2. Activate the clicked link
         const navLink = document.querySelector(`.nav-link[data-page="${page}"]`);
         if (navLink) navLink.classList.add('active');
 
-        // Update title
+        // 3. IMPORTANT: Verify the ID exists before trying to show it
+        const targetId = page + 'Page';
+        const pageEl = document.getElementById(targetId);
+        
+        if (!pageEl) {
+            console.error("CRITICAL ERROR: Could not find page element with ID:", targetId);
+            return; // Stops here if the page doesn't exist in HTML
+        }
+        
+        pageEl.classList.add('active'); // This makes it visible
+        console.log("Successfully showed:", targetId);
+
+        // 4. Update Header
         const titles = {
-            dashboard: 'Dashboard',
-            inventory: 'Inventory',
-            receive: 'Receive Stock',
-            transfer: 'Transfer Stock',
-            suppliers: 'Suppliers',
-            branches: 'Branches',
-            recipes: 'Recipe / BOM',
-            reports: 'Reports',
-            settings: 'Settings',
-            users: 'User Management'
+            dashboard: 'Dashboard', inventory: 'Inventory', receive: 'Receive Stock',
+            transfer: 'Transfer Stock', suppliers: 'Suppliers', branches: 'Branches',
+            recipes: 'Recipe / BOM', reports: 'Reports', settings: 'Settings', users: 'User Management'
         };
         const titleEl = document.getElementById('pageTitle');
         if (titleEl) titleEl.textContent = titles[page] || page;
 
-        // UI Cleanup
+        // 5. Cleanup UI
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('active');
 
-        // ROUTING LOGIC - This tells the app which module to render
+        // 6. Trigger Module Rendering
         switch(page) {
             case 'dashboard': renderDashboard(); break;
             case 'inventory': InventoryModule.render(); break;

@@ -321,63 +321,45 @@ const app = (function() {
     // NAVIGATION
     // ==========================================
     function navigate(page) {
-        // Check permission
-        if (!Auth.canAccessPage(page)) {
-            showToast('You do not have permission to access this page.', 'error');
+        if (!Auth.getUser()) {
+            showLoginScreen();
             return;
         }
 
         currentPage = page;
+        
+        // Update active class on sidebar links
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.toggle('active', link.dataset.page === page);
+        });
 
-        // Hide all pages
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        // Hide all pages, show target page
+        document.querySelectorAll('.page-view').forEach(view => {
+            view.style.display = view.id === page + 'Page' ? 'block' : 'none';
+        });
 
-        // Show selected page
-        const pageEl = document.getElementById(page + 'Page');
-        if (pageEl) pageEl.classList.add('active');
-
-        // Update nav
-        const navLink = document.querySelector(`.nav-link[data-page="${page}"]`);
-        if (navLink) navLink.classList.add('active');
-
-        // Update title
-        const titles = {
-            dashboard: 'Dashboard',
-            inventory: 'Inventory',
-            receive: 'Receive Stock',
-            transfer: 'Transfer Stock',
-            suppliers: 'Suppliers',
-            branches: 'Branches',
-            recipes: 'Recipe / BOM',
-            reports: 'Reports',
-            settings: 'Settings',
-            users: 'User Management'
-        };
-        const titleEl = document.getElementById('pageTitle');
-        if (titleEl) titleEl.textContent = titles[page] || page;
-
-        // Close sidebar on mobile
+        // Close mobile sidebar if open
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('active');
 
-        // Render page content
-        switch(page) {
-            case 'dashboard': renderDashboard(); break;
-            case 'inventory': InventoryModule.render(); break;
-            case 'receive': renderReceive(); break;
-            case 'transfer': renderTransfer(); break;
-            case 'suppliers': SuppliersModule.render(); break;
-            case 'branches': renderBranches(); break;
-            case 'recipes': RecipesModule.render(); break;
-            case 'reports': ReportsModule.render(); break;
-            case 'settings': SettingsModule.render(); break;
-            case 'users': renderUsers(); break;
+        // Trigger module rendering based on active page
+        if (page === 'dashboard') {
+            renderDashboard();
+        } else if (page === 'inventory') {
+            InventoryModule.render();
+        } else if (page === 'suppliers') {
+            SuppliersModule.render();
+        } else if (page === 'recipes') {
+            RecipesModule.render();
+        } else if (page === 'reports') {
+            ReportsModule.render();
+        } else if (page === 'users') {
+            renderUsers();
+        } else if (page === 'settings') {
+            // CRITICAL FIX: Explicitly call render so the form fields populate!
+            SettingsModule.render(); 
         }
-
-        window.scrollTo(0, 0);
     }
-
     // ==========================================
     // EVENT LISTENERS
     // ==========================================

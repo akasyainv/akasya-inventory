@@ -308,7 +308,7 @@ const app = (function() {
         }
     }
 
-    // ==========================================
+  // ==========================================
     // NAVIGATION
     // ==========================================
     function navigate(page) {
@@ -319,15 +319,19 @@ const app = (function() {
 
         currentPage = page;
 
+        // Hide all pages, remove active classes
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
 
+        // Show target page
         const pageEl = document.getElementById(page + 'Page');
         if (pageEl) pageEl.classList.add('active');
 
+        // Set active link
         const navLink = document.querySelector(`.nav-link[data-page="${page}"]`);
         if (navLink) navLink.classList.add('active');
 
+        // Update title
         const titles = {
             dashboard: 'Dashboard',
             inventory: 'Inventory',
@@ -343,9 +347,11 @@ const app = (function() {
         const titleEl = document.getElementById('pageTitle');
         if (titleEl) titleEl.textContent = titles[page] || page;
 
+        // UI Cleanup
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('active');
 
+        // ROUTING LOGIC - This tells the app which module to render
         switch(page) {
             case 'dashboard': renderDashboard(); break;
             case 'inventory': InventoryModule.render(); break;

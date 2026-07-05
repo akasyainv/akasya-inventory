@@ -931,6 +931,71 @@ const app = (function() {
         }
     }
 
+   function toggleUserActive(uid, currentlyActive) {
+        if (!Auth.isAdmin()) return;
+        if (uid === Auth.getUser()?.uid) {
+            showToast('You cannot deactivate your own account.', 'error');
+            return;
+        }
+        const action = currentlyActive ? 'deactivate' : 'activate';
+        const method = currentlyActive ? Auth.deactivateUser : Auth.activateUser;
+        if (confirm(`Are you sure you want to ${action} this user?`)) {
+            method.call(Auth, uid).then(() => {
+                showToast(`User ${action}d`, 'success');
+                renderUsers();
+            }).catch(err => {
+                showToast('Failed: ' + err.message, 'error');
+            });
+        }
+    } // <--- This is your existing closing bracket
+
+    // =========================================================
+    // PASTE THE NEW FUNCTION DIRECTLY HERE:
+    // =========================================================
+    function createUser() {
+        const name = document.getElementById('newUserName').value.trim();
+        const email = document.getElementById('newUserEmail').value.trim();
+        const password = document.getElementById('newUserPassword').value;
+        const role = document.getElementById('newUserRole').value;
+        
+        if (password.length < 6) {
+            showToast('Password must be at least 6 characters long', 'error');
+            return;
+        }
+
+        // Uses a secondary instance config profile to prevent your current Admin browser from being logged out!
+        const secondaryApp = firebase.initializeApp(firebase.app().options, "SecondaryRegistrationInstance");
+
+        secondaryApp.auth().createUserWithEmailAndPassword(email, password)
+            .then((userCredential) => {
+                const uid = userCredential.user.uid;
+                
+                // Matches your table view model perfectly (displayName & createdAt)
+                return firebase.database().ref('users/' + uid).set({
+                    uid: uid,
+                    displayName: name,
+                    email: email,
+                    role: role,
+                    isActive: true,
+                    createdAt: new Date().toISOString()
+                });
+            })
+            .then(() => {
+                showToast('User created successfully!', 'success');
+                
+                document.getElementById('addUserModal').style.display = 'none';
+                document.getElementById('createNewUserForm').reset();
+                
+                renderUsers(); // Refresh your table automatically
+                secondaryApp.delete(); // Unload secondary instance cleanly
+            })
+            .catch((error) => {
+                console.error("[Akasya Administration Error]:", error);
+                showToast(error.message, 'error');
+                secondaryApp.delete();
+            });
+    }
+
     // ==========================================
     // UTILITIES
     // ==========================================
@@ -1088,6 +1153,12 @@ const app = (function() {
     // PUBLIC API
     // ==========================================
     return {
+        init: init,
+        renderUsers: renderUsers,
+        changeUserRole: changeUserRole,
+        toggleUserActive: toggleUserActive,
+        createUser: createUser // <--- ADD THIS LINE HERE TOO!
+    };
         init,
         navigate,
         showToast,

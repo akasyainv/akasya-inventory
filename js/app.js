@@ -75,16 +75,8 @@ const app = (function() {
      * Otherwise, show login screen.
      */
     function checkFirstTimeSetup() {
-        Auth.checkAdminExists().then(adminExists => {
-            if (adminExists) {
-                showLoginScreen();
-            } else {
-                showSetupScreen();
-            }
-        }).catch((err) => {
-            console.warn("[Akasya] Database check failed, defaulting to Login screen directly:", err);
-            showLoginScreen();
-        });
+        // Bypassing the check to stop the browser from looping on new profiles
+        showLoginScreen();
     }
 
     // ==========================================

@@ -144,11 +144,12 @@ const app = (function() {
         document.body.style.overflow = '';
     }
 
-    // ==========================================
+   // ==========================================
     // LOGIN HANDLERS
     // ==========================================
     function handleLogin(e) {
-        e.preventDefault();
+        if (e) e.preventDefault(); // STOP the browser from refreshing instantly
+        
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
         const btn = document.getElementById('loginBtn');
@@ -169,6 +170,7 @@ const app = (function() {
                 document.getElementById('loginForm').reset();
             })
             .catch(err => {
+                console.error("Login failed error log:", err);
                 let msg = 'Login failed. Please try again.';
                 if (err.code === 'auth/user-not-found') msg = 'No account found with this email.';
                 if (err.code === 'auth/wrong-password') msg = 'Incorrect password.';
@@ -183,7 +185,8 @@ const app = (function() {
     }
 
     function handleSetup(e) {
-        e.preventDefault();
+        if (e) e.preventDefault(); // STOP the browser from refreshing instantly
+        
         const displayName = document.getElementById('setupName').value.trim();
         const email = document.getElementById('setupEmail').value.trim();
         const password = document.getElementById('setupPassword').value;
@@ -210,7 +213,7 @@ const app = (function() {
 
         Auth.createFirstAdmin(email, password, displayName)
             .then(() => {
-                // Fire and forget the initial settings save
+                // Initial settings save
                 DB.settings.save({
                     businessName: 'Akasya Coffee',
                     warehouseName: 'Main Warehouse',
@@ -219,7 +222,6 @@ const app = (function() {
                     theme: 'light'
                 });
 
-                // Force move into the application right away
                 setupApp();
                 showToast('Welcome, Admin! Your account has been created.', 'success');
                 document.getElementById('setupForm').reset();
@@ -236,28 +238,6 @@ const app = (function() {
                 btn.textContent = 'Create Admin Account';
             });
     }
-
-    function handleLogout() {
-        showLoading('Signing out...');
-        // Detach all real-time listeners
-        DB.detachAllListeners();
-        _unsubInventory = null;
-        _unsubSuppliers = null;
-        _unsubTransactions = null;
-        _unsubRecipes = null;
-        _unsubSettings = null;
-
-        Auth.logout().then(() => {
-            hideLoading();
-            showLoginScreen();
-            document.getElementById('loginForm').reset();
-            document.getElementById('loginError').textContent = '';
-        }).catch(() => {
-            hideLoading();
-            showLoginScreen();
-        });
-    }
-
     // ==========================================
     // USER DISPLAY
     // ==========================================

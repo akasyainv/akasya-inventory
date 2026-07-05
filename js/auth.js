@@ -55,23 +55,30 @@ const Auth = (function() {
 
         const auth = DB.getAuth();
 
-        return new Promise((resolve) => {
-            _authUnsubscribe = auth.onAuthStateChanged(firebaseUser => {
-                if (firebaseUser) {
-                    currentUser = firebaseUser;
-                    loadUserProfile(firebaseUser.uid).then(() => {
-                        resolve(firebaseUser);
+        return new Promise((resolve, reject) => {
+            // FORCE local persistence BEFORE listening to the state change
+            firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                .then(() => {
+                    _authUnsubscribe = auth.onAuthStateChanged(firebaseUser => {
+                        if (firebaseUser) {
+                            currentUser = firebaseUser;
+                            loadUserProfile(firebaseUser.uid).then(() => {
+                                resolve(firebaseUser);
+                            });
+                        } else {
+                            currentUser = null;
+                            userRole = null;
+                            userProfile = null;
+                            resolve(null);
+                        }
                     });
-                } else {
-                    currentUser = null;
-                    userRole = null;
-                    userProfile = null;
-                    resolve(null);
-                }
-            });
+                })
+                .catch(err => {
+                    console.error("Persistence failed in Auth.init:", err);
+                    reject(err);
+                });
         });
     }
-
     // ==========================================
     // USER PROFILE
     // ==========================================

@@ -20,15 +20,20 @@ const DB = (function() {
     // Replace these values with your own Firebase project config.
    // Found in: Firebase Console > Project Settings > General > Your apps
     // ==========================================
-    const FIREBASE_CONFIG = {
-        apiKey: "AIzaSyCIxN3KpGcHUwS_k0BfrKXjIX5vYQEuul0",
-        authDomain: "akasya-coffee.firebaseapp.com",
-        databaseURL: "https://akasya-coffee-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "akasya-coffee",
-        storageBucket: "akasya-coffee.firebasestorage.app",
-        messagingSenderId: "542797634137",
-        appId: "1:542797634137:web:cc29db9d8d91143055af48"
-    };
+    // Make sure this is lowercase "firebaseConfig" to match the rest of your script
+const firebaseConfig = {
+    apiKey: "AIzaSyCIxN3KpGcHUwS_k0BfrKXjIX5vYQEuul0",
+    authDomain: "akasya-coffee.firebaseapp.com",
+    databaseURL: "https://akasya-coffee-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "akasya-coffee",
+    storageBucket: "akasya-coffee.firebasestorage.app",
+    messagingSenderId: "542797634137",
+    appId: "1:542797634137:web:cc29db9d8d91143055af48"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
 
     // ==========================================
     // INITIALIZATION

@@ -238,18 +238,19 @@ const app = (function() {
 
         Auth.createFirstAdmin(email, password, displayName)
             .then(() => {
-                // Save initial settings
+                // Fire and forget the initial settings save
                 DB.settings.save({
                     businessName: 'Akasya Coffee',
                     warehouseName: 'Main Warehouse',
                     currency: '\u20B1',
                     reorderLevel: 10,
                     theme: 'light'
-                }).then(() => {
-                    setupApp();
-                    showToast('Welcome, Admin! Your account has been created.', 'success');
-                    document.getElementById('setupForm').reset();
                 });
+
+                // Force move into the application right away
+                setupApp();
+                showToast('Welcome, Admin! Your account has been created.', 'success');
+                document.getElementById('setupForm').reset();
             })
             .catch(err => {
                 let msg = 'Failed to create account. Please try again.';

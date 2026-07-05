@@ -580,20 +580,68 @@ const app = (function() {
             return s === 'Low' || s === 'Critical';
         });
 
-        // Add this to actually render the rows (example logic)
-        tbody.innerHTML = lowStockItems.map(i => `
-            <tr>
-                <td>${i.name}</td>
-                <td>${getStatus(i)}</td>
-            </tr>
-        `).join('');
-    } // End of renderDashboard
+        if (tbody) {
+            if (lowStockItems.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No low stock items</p></td></tr>';
+            } else {
+                tbody.innerHTML = lowStockItems.map(item => {
+                    const status = getStatus(item);
+                    const statusClass = status === 'Critical' ? 'badge-critical' : 'badge-low';
+                    return `<tr>
+                        <td><span class="item-name-text">${escapeHtml(item.name)}</span></td>
+                        <td class="text-right">${item.qtyWarehouse || 0}</td>
+                        <td class="text-right">${item.qtyBamban || 0}</td>
+                        <td class="text-right">${item.qtyCapas || 0}</td>
+                        <td><span class="badge-status ${statusClass}">${status}</span></td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+    }
 
-    // IMPORTANT: Make sure you have the public return object at the very end!
+    // ==========================================
+    // PUBLIC API
+    // ==========================================
     return {
-        init,
-        navigate,
-        showToast,
-        // ... (include your other exported functions)
+        init: init,
+        navigate: navigate,
+        showToast: showToast,
+        openModal: openModal,
+        closeModal: closeModal,
+        showLoading: showLoading,
+        hideLoading: hideLoading,
+        genId: genId,
+        genRefNum: genRefNum,
+        formatDate: formatDate,
+        formatCurrency: formatCurrency,
+        todayStr: todayStr,
+        nowTimeStr: nowTimeStr,
+        getStatus: getStatus,
+        getSupplierName: getSupplierName,
+        escapeHtml: escapeHtml,
+        debounce: debounce,
+        downloadCSV: downloadCSV,
+        getInventoryData: getInventoryData,
+        getSuppliersData: getSuppliersData,
+        getTransactionsData: getTransactionsData,
+        getRecipesData: getRecipesData,
+        getSettingsData: getSettingsData,
+        getInventorySort: getInventorySort,
+        getInventoryFilter: getInventoryFilter,
+        getInventoryPageNum: getInventoryPageNum,
+        setInventoryPageNum: setInventoryPageNum,
+        getInventoryPerPage: getInventoryPerPage,
+        renderReceive: renderReceive,
+        renderRecentDeliveries: renderRecentDeliveries,
+        renderTransfer: renderTransfer,
+        renderTransferHistory: renderTransferHistory,
+        updateRefNumbers: updateRefNumbers,
+        changeUserRole: changeUserRole,
+        toggleUserActive: toggleUserActive,
+        renderUsers: renderUsers,
+        createUser: createUser
     };
 })();
+
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', app.init);

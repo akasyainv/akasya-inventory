@@ -1,15 +1,6 @@
 /* =============================================
    AKASYA COFFEE - DATABASE MODULE
    Firebase Realtime Database Integration
-   =============================================
-
-   SETUP INSTRUCTIONS:
-   1. Go to https://console.firebase.google.com/
-   2. Create a new project (or use existing)
-   3. Enable Authentication (Email/Password)
-   4. Create a Realtime Database
-   5. Copy your Firebase config object
-   6. Replace the placeholder values below
    ============================================= */
 
 const DB = (function() {
@@ -17,29 +8,22 @@ const DB = (function() {
 
     // ==========================================
     // FIREBASE CONFIGURATION
-    // Replace these values with your own Firebase project config.
-   // Found in: Firebase Console > Project Settings > General > Your apps
     // ==========================================
-    // Make sure this is lowercase "firebaseConfig" to match the rest of your script
-const firebaseConfig = {
-    apiKey: "AIzaSyCIxN3KpGcHUwS_k0BfrKXjIX5vYQEuul0",
-    authDomain: "akasya-coffee.firebaseapp.com",
-    databaseURL: "https://akasya-coffee-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "akasya-coffee",
-    storageBucket: "akasya-coffee.firebasestorage.app",
-    messagingSenderId: "542797634137",
-    appId: "1:542797634137:web:cc29db9d8d91143055af48"
-};
-
-firebase.initializeApp(firebaseConfig);
-// Change "const database" to "const firebaseDB"
-const firebaseDB = firebase.database();
+    const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyCIxN3KpGcHUwS_k0BfrKXjIX5vYQEuul0",
+        authDomain: "akasya-coffee.firebaseapp.com",
+        databaseURL: "https://akasya-coffee-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "akasya-coffee",
+        storageBucket: "akasya-coffee.firebasestorage.app",
+        messagingSenderId: "542797634137",
+        appId: "1:542797634137:web:cc29db9d8d91143055af48"
+    };
 
     // ==========================================
     // INITIALIZATION
     // ==========================================
     let app = null;
-    let rtdb = null;
+    let rtdb = null;  // Corrected to avoid system naming collision
     let auth = null;
     let _listeners = [];
 
@@ -56,7 +40,7 @@ const firebaseDB = firebase.database();
             } else {
                 app = firebase.apps[0];
             }
-            rtdb = firebase.database();
+            rtdb = firebase.database(); // Uses the unique rtdb name
             auth = firebase.auth();
             console.log("[Akasya] Firebase initialized successfully");
             return true;
@@ -66,7 +50,7 @@ const firebaseDB = firebase.database();
         }
     }
 
-    function getDatabase() { return rtdb; }
+    function getDatabase() { return rtdb; } // Uses rtdb
     function getAuth() { return auth; }
     function isConfigured() { return FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"; }
 

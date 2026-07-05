@@ -6,6 +6,36 @@
 const app = (function() {
     'use strict';
 
+    // All your state variables here...
+
+    // All your functions MUST be defined here inside the wrapper
+    function checkFirstTimeSetup() {
+        // logic here
+    }
+
+    function setupApp() {
+        // logic here
+    }
+
+    function init() {
+        // Now 'checkFirstTimeSetup' can be called directly because it's in the same scope
+        Auth.init().then(firebaseUser => {
+            if (firebaseUser) {
+                setupApp(); 
+            } else {
+                checkFirstTimeSetup(); // This will now work!
+            }
+        });
+    }
+
+    // Expose only what is needed by index.html
+    return {
+        init: init,
+        handleLogin: handleLogin,
+        handleSetup: handleSetup
+    };
+})();
+
     // ==========================================
     // STATE
     // ==========================================

@@ -97,10 +97,20 @@ const Auth = (function() {
     // ==========================================
     function login(email, password) {
         const auth = DB.getAuth();
-        return auth.signInWithEmailAndPassword(email, password)
+        
+        // 1. Force Local Storage Persistence first to bypass browser privacy filters
+        return firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+            .then(() => {
+                // 2. Proceed with the standard sign-in once persistence is secured
+                return auth.signInWithEmailAndPassword(email, password);
+            })
             .then(credential => {
                 currentUser = credential.user;
                 return loadUserProfile(credential.user.uid).then(() => credential.user);
+            })
+            .catch(error => {
+                console.error("Authentication Error Details:", error.code, error.message);
+                throw error; // Pass the error along to your UI notifier
             });
     }
 

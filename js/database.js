@@ -23,24 +23,22 @@ const DB = (function() {
     // INITIALIZATION
     // ==========================================
     let app = null;
-    let rtdb = null;  // Corrected to avoid system naming collision
+    let rtdb = null; 
     let auth = null;
     let _listeners = [];
 
     function init() {
-        // Check if config has been updated
         if (FIREBASE_CONFIG.apiKey === "YOUR_API_KEY") {
             console.warn("[Akasya] Firebase config not set. Please update FIREBASE_CONFIG in js/database.js");
             return false;
         }
         try {
-            // Initialize Firebase only once
             if (!firebase.apps.length) {
                 app = firebase.initializeApp(FIREBASE_CONFIG);
             } else {
                 app = firebase.apps[0];
             }
-            rtdb = firebase.database(); // Uses the unique rtdb name
+            rtdb = firebase.database();
             auth = firebase.auth();
             console.log("[Akasya] Firebase initialized successfully");
             return true;
@@ -50,7 +48,7 @@ const DB = (function() {
         }
     }
 
-    function getDatabase() { return rtdb; } // Uses rtdb
+    function getDatabase() { return rtdb; }
     function getAuth() { return auth; }
     function isConfigured() { return FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"; }
 
@@ -58,9 +56,6 @@ const DB = (function() {
     // GENERIC CRUD OPERATIONS
     // ==========================================
 
-    /**
-     * Write data to a path. Returns a Promise.
-     */
     function write(path, data) {
         if (!rtdb) return Promise.reject("Database not initialized");
         return rtdb.ref(path).set(data)
@@ -68,9 +63,6 @@ const DB = (function() {
             .catch(err => { console.error(`[DB] Write error at ${path}:`, err); throw err; });
     }
 
-    /**
-     * Read data from a path once. Returns a Promise with the value.
-     */
     function read(path) {
         if (!rtdb) return Promise.reject("Database not initialized");
         return rtdb.ref(path).once('value')
@@ -78,9 +70,6 @@ const DB = (function() {
             .catch(err => { console.error(`[DB] Read error at ${path}:`, err); throw err; });
     }
 
-    /**
-     * Push new data (auto-generates key). Returns a Promise with the new key.
-     */
     function push(path, data) {
         if (!rtdb) return Promise.reject("Database not initialized");
         const ref = rtdb.ref(path).push();
@@ -89,9 +78,6 @@ const DB = (function() {
             .catch(err => { console.error(`[DB] Push error at ${path}:`, err); throw err; });
     }
 
-    /**
-     * Update specific fields. Returns a Promise.
-     */
     function update(path, data) {
         if (!rtdb) return Promise.reject("Database not initialized");
         return rtdb.ref(path).update(data)
@@ -99,9 +85,6 @@ const DB = (function() {
             .catch(err => { console.error(`[DB] Update error at ${path}:`, err); throw err; });
     }
 
-    /**
-     * Remove data at path. Returns a Promise.
-     */
     function remove(path) {
         if (!rtdb) return Promise.reject("Database not initialized");
         return rtdb.ref(path).remove()
@@ -113,16 +96,11 @@ const DB = (function() {
     // REAL-TIME LISTENERS
     // ==========================================
 
-    /**
-     * Listen to a path for real-time changes.
-     * Returns an unsubscribe function.
-     */
     function listen(path, callback) {
         if (!rtdb) return function(){};
         const ref = rtdb.ref(path);
         const handler = snapshot => {
             const val = snapshot.val();
-            // Convert object-of-objects to array if needed
             if (val && typeof val === 'object' && !Array.isArray(val)) {
                 const arr = Object.entries(val).map(([key, v]) => {
                     if (typeof v === 'object' && v !== null) {
@@ -141,9 +119,6 @@ const DB = (function() {
         return unsubscribe;
     }
 
-    /**
-     * Listen to a single object (not array). Returns unsubscribe function.
-     */
     function listenOne(path, callback) {
         if (!rtdb) return function(){};
         const ref = rtdb.ref(path);
@@ -156,9 +131,6 @@ const DB = (function() {
         return unsubscribe;
     }
 
-    /**
-     * Remove all active listeners.
-     */
     function detachAllListeners() {
         _listeners.forEach(l => l.unsubscribe());
         _listeners = [];
@@ -168,7 +140,6 @@ const DB = (function() {
     // COLLECTION HELPERS
     // ==========================================
 
-    // --- INVENTORY ---
     const inventory = {
         getAll(callback) { return listen('inventory', callback); },
         getOne(id) { return read(`inventory/${id}`); },
@@ -177,7 +148,6 @@ const DB = (function() {
         delete(id) { return remove(`inventory/${id}`); }
     };
 
-    // --- SUPPLIERS ---
     const suppliers = {
         getAll(callback) { return listen('suppliers', callback); },
         getOne(id) { return read(`suppliers/${id}`); },
@@ -186,14 +156,12 @@ const DB = (function() {
         delete(id) { return remove(`suppliers/${id}`); }
     };
 
-    // --- TRANSACTIONS ---
     const transactions = {
         getAll(callback) { return listen('transactions', callback); },
         create(data) { return push('transactions', data); },
         delete(id) { return remove(`transactions/${id}`); }
     };
 
-    // --- RECIPES ---
     const recipes = {
         getAll(callback) { return listen('recipes', callback); },
         create(data) { return push('recipes', data); },
@@ -201,13 +169,11 @@ const DB = (function() {
         delete(id) { return remove(`recipes/${id}`); }
     };
 
-    // --- SETTINGS ---
     const settings = {
         get(callback) { return listenOne('settings', callback); },
         save(data) { return write('settings', data); }
     };
 
-    // --- USERS ---
     const users = {
         getAll(callback) { return listen('users', callback); },
         getOne(uid) { return read(`users/${uid}`); },
@@ -216,54 +182,12 @@ const DB = (function() {
         delete(uid) { return remove(`users/${uid}`); }
     };
 
-    // Need a separate internal reference since 'update' conflicts with the method name above
     function update_db(path, data) {
-        if (!database) return Promise.reject("Database not initialized");
-        return database.ref(path).update(data)
+        if (!rtdb) return Promise.reject("Database not initialized");
+        return rtdb.ref(path).update(data)
             .then(() => ({ success: true }))
             .catch(err => { console.error(`[DB] Update error at ${path}:`, err); throw err; });
     }
-
-    // ==========================================
-    // SECURITY RULES HELPER
-    // ==========================================
-
-    /**
-     * These are the recommended Firebase Realtime Database security rules.
-     * Copy these into: Firebase Console > Realtime Database > Rules
-     *
-     * {
-     *   "rules": {
-     *     "inventory": {
-     *       ".read": "auth != null",
-     *       ".write": "auth != null"
-     *     },
-     *     "suppliers": {
-     *       ".read": "auth != null",
-     *       ".write": "auth != null"
-     *     },
-     *     "transactions": {
-     *       ".read": "auth != null",
-     *       ".write": "auth != null"
-     *     },
-     *     "recipes": {
-     *       ".read": "auth != null",
-     *       ".write": "auth != null"
-     *     },
-     *     "settings": {
-     *       ".read": "auth != null",
-     *       ".write": "auth != null && root.child('users/' + auth.uid + '/role').val() === 'admin'"
-     *     },
-     *     "users": {
-     *       ".read": "auth != null && root.child('users/' + auth.uid + '/role').val() === 'admin'",
-     *       ".write": "auth != null && root.child('users/' + auth.uid + '/role').val() === 'admin'",
-     *       "$uid": {
-     *         ".read": "auth != null && (auth.uid === $uid || root.child('users/' + auth.uid + '/role').val() === 'admin')"
-     *       }
-     *     }
-     *   }
-     * }
-     */
 
     // ==========================================
     // PUBLIC API

@@ -1171,7 +1171,7 @@ const app = (function() {
         changeUserRole: changeUserRole,
         toggleUserActive: toggleUserActive,
         renderUsers: renderUsers,
-        createUser: createUser // <--- Cleanly tied into the primary API export!
+        createUser: createUser
     };
 })();
 

@@ -34,8 +34,6 @@ const app = (function() {
     // ==========================================
     // INITIALIZATION
     // ==========================================
-    let _hasCheckedSetup = false; // Flag to prevent infinite login UI looping
-
     function init() {
         // Step 1: Initialize Firebase
         const dbReady = DB.init();
@@ -44,6 +42,10 @@ const app = (function() {
             showFirebaseConfigScreen();
             return;
         }
+
+        // CRITICAL FIX: Always set up event listeners immediately on startup 
+        // so that the login and setup forms can process submissions without reloading the page!
+        setupEventListeners();
 
         // Step 2: Set up auth state listener
         Auth.init().then(firebaseUser => {
@@ -56,13 +58,8 @@ const app = (function() {
                 }
                 setupApp();
             } else {
-                // Only run setup check ONCE per session lifecycle to prevent UI loops
-                if (!_hasCheckedSetup) {
-                    _hasCheckedSetup = true;
-                    checkFirstTimeSetup();
-                } else {
-                    showLoginScreen();
-                }
+                // Not logged in - check if first-time setup needed
+                checkFirstTimeSetup();
             }
         }).catch(err => {
             console.error("[Akasya] Auth init error:", err);
@@ -71,12 +68,15 @@ const app = (function() {
     }
 
     /**
-     * Check if any admin exists. If not, show first-time setup screen.
-     * Otherwise, show login screen.
+     * Called after successful authentication. Sets up the authenticated app state.
      */
-    function checkFirstTimeSetup() {
-        // Bypassing the check to stop the browser from looping on new profiles
-        showLoginScreen();
+    function setupApp() {
+        showAppScreen();
+        setupRealTimeListeners();
+        // Removed setupEventListeners() from here since it now runs safely at startup
+        updateUserDisplay();
+        applyRoleBasedUI();
+        navigate('dashboard');
     }
 
     // ==========================================

@@ -50,8 +50,9 @@ const app = (function() {
         // Step 2: Set up auth state listener
         Auth.init().then(firebaseUser => {
             if (firebaseUser) {
-                // User is logged in - check if active
-                if (Auth.getProfile() && Auth.getProfile().isActive === false) {
+                // Fetch the profile safely, fall back gracefully if blocked
+                const profile = Auth.getProfile();
+                if (profile && profile.isActive === false) {
                     showLoginScreen();
                     showToast('Your account has been deactivated. Contact an admin.', 'error');
                     return;
@@ -65,7 +66,6 @@ const app = (function() {
             console.error("[Akasya] Auth init error:", err);
             showLoginScreen();
         });
-    }
 
     /**
      * Check if any admin exists. If not, show first-time setup screen.
@@ -101,7 +101,7 @@ const app = (function() {
     function setupRealTimeListeners() {
         // Listen to inventory changes
         _unsubInventory = DB.inventory.getAll(data => {
-            _inventoryData = data || [];
+            _inventoryData = Array.isArray(data) ? data : (data ? Object.values(data) : []);
             if (currentPage === 'inventory') InventoryModule.render();
             if (currentPage === 'dashboard') renderDashboard();
             if (currentPage === 'branches') renderBranches();
@@ -112,7 +112,7 @@ const app = (function() {
 
         // Listen to suppliers changes
         _unsubSuppliers = DB.suppliers.getAll(data => {
-            _suppliersData = data || [];
+            _suppliersData = Array.isArray(data) ? data : (data ? Object.values(data) : []);
             if (currentPage === 'suppliers') SuppliersModule.render();
             if (currentPage === 'inventory') InventoryModule.render();
             if (currentPage === 'dashboard') renderDashboard();
@@ -120,7 +120,7 @@ const app = (function() {
 
         // Listen to transactions changes
         _unsubTransactions = DB.transactions.getAll(data => {
-            _transactionsData = data || [];
+            _transactionsData = Array.isArray(data) ? data : (data ? Object.values(data) : []);
             if (currentPage === 'dashboard') renderDashboard();
             if (currentPage === 'receive') renderRecentDeliveries();
             if (currentPage === 'transfer') renderTransferHistory();
@@ -129,17 +129,13 @@ const app = (function() {
 
         // Listen to recipes changes
         _unsubRecipes = DB.recipes.getAll(data => {
-            _recipesData = data || [];
+            _recipesData = Array.isArray(data) ? data : (data ? Object.values(data) : []);
             if (currentPage === 'recipes') RecipesModule.render();
         });
 
         // Listen to settings changes
         _unsubSettings = DB.settings.get(data => {
             _settingsData = data || {};
-            // A personal theme choice (from the topbar toggle) always wins
-            // over the business-wide default saved in Settings, so a
-            // viewer/staff member's preference survives even though they
-            // can't change the business default themselves.
             const personal = getStoredThemePreference();
             applyTheme(personal || _settingsData.theme || 'light');
             if (currentPage === 'settings') SettingsModule.render();

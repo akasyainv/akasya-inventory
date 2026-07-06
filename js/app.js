@@ -361,28 +361,26 @@ const app = (function() {
     }
 
     function setupEventListeners() {
-        document.getElementById('menuToggle').addEventListener('click', function() {
-            document.getElementById('sidebar').classList.add('open');
-            document.getElementById('sidebarOverlay').classList.add('active');
-        });
-        document.getElementById('sidebarClose').addEventListener('click', function() {
-            document.getElementById('sidebar').classList.remove('open');
-            document.getElementById('sidebarOverlay').classList.remove('active');
-        });
-        document.getElementById('sidebarOverlay').addEventListener('click', function() {
-            document.getElementById('sidebar').classList.remove('open');
-            document.getElementById('sidebarOverlay').classList.remove('active');
-        });
+    // ... leave other navigation/sidebar listeners exactly as they are ...
 
-        const themeBtn = document.getElementById('themeToggleBtn');
-        if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+    // FIX: Grab the button directly and bind the login handler directly to its click event
+    var loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', handleLogin);
+    }
 
-        document.querySelectorAll('.nav-link[data-page]').forEach(function(link) {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                navigate(link.dataset.page);
-            });
+    // Optional but highly recommended: Let users log in by pressing "Enter" inside the password box
+    var loginPassword = document.getElementById('loginPassword');
+    if (loginPassword) {
+        loginPassword.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin(e);
+            }
         });
+    }
+
+    // ... leave the rest of your form submit/adjustment listeners exactly as they are ...
+}
 
         document.getElementById('loginForm').addEventListener('submit', handleLogin);
         document.getElementById('setupForm').addEventListener('submit', handleSetup);

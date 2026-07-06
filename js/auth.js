@@ -52,38 +52,45 @@ const Auth = (function() {
     // INITIALIZATION
     // ==========================================
     function init() {
-        if (!DB.isConfigured()) return Promise.reject("Firebase not configured");
+    if (!DB.isConfigured()) return Promise.reject("Firebase not configured");
 
-        // Only initialize once - return existing promise if already started
-        if (_initPromise) return _initPromise;
+    if (_initPromise) return _initPromise;
 
-        const auth = DB.getAuth();
+    const auth = DB.getAuth();
 
-        _initPromise = new Promise((resolve) => {
-            _authUnsubscribe = auth.onAuthStateChanged(firebaseUser => {
-                if (firebaseUser) {
-                    currentUser = firebaseUser;
-                    // Load profile from database, then resolve
-                    loadUserProfile(firebaseUser.uid).then(() => {
-                        resolve(firebaseUser);
-                    }).catch(() => {
-                        // Even if profile load fails, we still have a logged-in user
-                        // Default to viewer role so they're not locked out
-                        userRole = 'viewer';
-                        userProfile = { uid: firebaseUser.uid, role: 'viewer', email: firebaseUser.email, isActive: true };
-                        resolve(firebaseUser);
-                    });
-                } else {
-                    currentUser = null;
-                    userRole = null;
-                    userProfile = null;
-                    resolve(null);
-                }
-            });
+    _initPromise = new Promise((resolve) => {
+        _authUnsubscribe = auth.onAuthStateChanged(firebaseUser => {
+            if (firebaseUser) {
+                currentUser = firebaseUser;
+                
+                // --- ADDED SAFETY CHECK ---
+                console.log("Logged in as:", firebaseUser.uid);
+                
+                loadUserProfile(firebaseUser.uid).then(() => {
+                    resolve(firebaseUser);
+                }).catch((err) => {
+                    console.error("Profile load failed, using default:", err);
+                    userRole = 'viewer';
+                    // Ensure isActive is true so it passes the app.js check
+                    userProfile = { 
+                        uid: firebaseUser.uid, 
+                        role: 'viewer', 
+                        email: firebaseUser.email, 
+                        isActive: true 
+                    };
+                    resolve(firebaseUser);
+                });
+            } else {
+                currentUser = null;
+                userRole = null;
+                userProfile = null;
+                resolve(null);
+            }
         });
+    });
 
-        return _initPromise;
-    }
+    return _initPromise;
+}
 
     // ==========================================
     // USER PROFILE

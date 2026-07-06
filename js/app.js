@@ -14,45 +14,37 @@ const app = (function() {
     let inventoryFilter = { search: '', category: '', supplier: '', status: '' };
     let inventoryPageNum = 1;
     const inventoryPerPage = 15;
-    let _dataReady = false;
 
     // Cache for real-time data
-    let _inventoryData = [];
-    let _suppliersData = [];
-    let _transactionsData = [];
-    let _recipesData = [];
-    let _settingsData = {};
+    let cacheInventory = [];
+    let cacheSuppliers = [];
+    let cacheTransactions = [];
+    let cacheRecipes = [];
+    let cacheSettings = {};
 
     // Unsubscribe functions for real-time listeners
-    let _unsubInventory = null;
-    let _unsubSuppliers = null;
-    let _unsubTransactions = null;
-    let _unsubRecipes = null;
-    let _unsubSettings = null;
+    let unsubInventory = null;
+    let unsubSuppliers = null;
+    let unsubTransactions = null;
+    let unsubRecipes = null;
+    let unsubSettings = null;
 
     // ==========================================
     // INITIALIZATION
     // ==========================================
     function init() {
-        // Apply any saved personal theme preference right away so the
-        // login/setup screens also respect it, before Firebase even loads.
         applyTheme(getStoredThemePreference() || 'light');
 
-        // Step 1: Initialize Firebase
         const dbReady = DB.init();
-
         if (!dbReady) {
             showFirebaseConfigScreen();
             return;
         }
 
-        // Step 2: Set up auth state listener
-        Auth.init().then(firebaseUser => {
+        Auth.init().then(function(firebaseUser) {
             if (firebaseUser) {
-                // User is logged in - check if active
                 if (Auth.getProfile() && Auth.getProfile().isActive === false) {
-                    // FIXED: Clears invalid authorization token out of Firebase context to prevent layout routing loops.
-                    Auth.logout().then(() => {
+                    Auth.logout().then(function() {
                         showLoginScreen();
                         showToast('Your account has been deactivated. Contact an admin.', 'error');
                     });
@@ -60,34 +52,26 @@ const app = (function() {
                 }
                 setupApp();
             } else {
-                // Not logged in - check if first-time setup needed
                 checkFirstTimeSetup();
             }
-        }).catch(err => {
+        }).catch(function(err) {
             console.error("[Akasya] Auth init error:", err);
             showLoginScreen();
         });
     }
 
-    /**
-     * Check if any admin exists. If not, show first-time setup screen.
-     * Otherwise, show login screen.
-     */
     function checkFirstTimeSetup() {
-        Auth.checkAdminExists().then(adminExists => {
+        Auth.checkAdminExists().then(function(adminExists) {
             if (adminExists) {
                 showLoginScreen();
             } else {
                 showSetupScreen();
             }
-        }).catch(() => {
+        }).catch(function() {
             showLoginScreen();
         });
     }
 
-    /**
-     * Called after successful authentication. Sets up the full app.
-     */
     function setupApp() {
         showAppScreen();
         setupRealTimeListeners();
@@ -101,9 +85,8 @@ const app = (function() {
     // REAL-TIME DATA LISTENERS
     // ==========================================
     function setupRealTimeListeners() {
-        // Listen to inventory changes
-        _unsubInventory = DB.inventory.getAll(data => {
-            _inventoryData = data || [];
+        unsubInventory = DB.inventory.getAll(function(data) {
+            cacheInventory = data || [];
             if (currentPage === 'inventory') InventoryModule.render();
             if (currentPage === 'dashboard') renderDashboard();
             if (currentPage === 'branches') renderBranches();
@@ -112,38 +95,30 @@ const app = (function() {
             if (currentPage === 'recipes') RecipesModule.populateDropdowns();
         });
 
-        // Listen to suppliers changes
-        _unsubSuppliers = DB.suppliers.getAll(data => {
-            _suppliersData = data || [];
+        unsubSuppliers = DB.suppliers.getAll(function(data) {
+            cacheSuppliers = data || [];
             if (currentPage === 'suppliers') SuppliersModule.render();
             if (currentPage === 'inventory') InventoryModule.render();
             if (currentPage === 'dashboard') renderDashboard();
         });
 
-        // Listen to transactions changes
-        _unsubTransactions = DB.transactions.getAll(data => {
-            _transactionsData = data || [];
+        unsubTransactions = DB.transactions.getAll(function(data) {
+            cacheTransactions = data || [];
             if (currentPage === 'dashboard') renderDashboard();
             if (currentPage === 'receive') renderRecentDeliveries();
             if (currentPage === 'transfer') renderTransferHistory();
             if (currentPage === 'reports') ReportsModule.render();
         });
 
-        // Listen to recipes changes
-        _unsubRecipes = DB.recipes.getAll(data => {
-            _recipesData = data || [];
+        unsubRecipes = DB.recipes.getAll(function(data) {
+            cacheRecipes = data || [];
             if (currentPage === 'recipes') RecipesModule.render();
         });
 
-        // Listen to settings changes
-        _unsubSettings = DB.settings.get(data => {
-            _settingsData = data || {};
-            // A personal theme choice (from the topbar toggle) always wins
-            // over the business-wide default saved in Settings, so a
-            // viewer/staff member's preference survives even though they
-            // can't change the business default themselves.
+        unsubSettings = DB.settings.get(function(data) {
+            cacheSettings = data || {};
             const personal = getStoredThemePreference();
-            applyTheme(personal || _settingsData.theme || 'light');
+            applyTheme(personal || cacheSettings.theme || 'light');
             if (currentPage === 'settings') SettingsModule.render();
         });
     }
@@ -187,7 +162,7 @@ const app = (function() {
     // LOGIN HANDLERS
     // ==========================================
     function handleLogin(e) {
-        e.preventDefault();
+        if (e) e.preventDefault();
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
         const btn = document.getElementById('loginBtn');
@@ -203,10 +178,9 @@ const app = (function() {
         errorEl.textContent = '';
 
         Auth.login(email, password)
-            .then(() => {
-                // Re-verify account suspension state immediately upon successful manual sign in 
+            .then(function() {
                 if (Auth.getProfile() && Auth.getProfile().isActive === false) {
-                    Auth.logout().then(() => {
+                    Auth.logout().then(function() {
                         showLoginScreen();
                         errorEl.textContent = 'Your account has been deactivated. Contact an admin.';
                     });
@@ -215,7 +189,7 @@ const app = (function() {
                 setupApp();
                 document.getElementById('loginForm').reset();
             })
-            .catch(err => {
+            .catch(function(err) {
                 let msg = 'Login failed. Please try again.';
                 if (err.code === 'auth/user-not-found') msg = 'No account found with this email.';
                 if (err.code === 'auth/wrong-password') msg = 'Incorrect password.';
@@ -223,14 +197,14 @@ const app = (function() {
                 if (err.code === 'auth/too-many-requests') msg = 'Too many failed attempts. Please try again later.';
                 errorEl.textContent = msg;
             })
-            .finally(() => {
+            .finally(function() {
                 btn.disabled = false;
                 btn.textContent = 'Sign In';
             });
     }
 
     function handleSetup(e) {
-        e.preventDefault();
+        if (e) e.preventDefault();
         const displayName = document.getElementById('setupName').value.trim();
         const email = document.getElementById('setupEmail').value.trim();
         const password = document.getElementById('setupPassword').value;
@@ -256,28 +230,27 @@ const app = (function() {
         errorEl.textContent = '';
 
         Auth.createFirstAdmin(email, password, displayName)
-            .then(() => {
-                // Save initial settings
+            .then(function() {
                 DB.settings.save({
                     businessName: 'Akasya Coffee',
                     warehouseName: 'Main Warehouse',
                     currency: '\u20B1',
                     reorderLevel: 10,
                     theme: 'light'
-                }).then(() => {
+                }).then(function() {
                     setupApp();
                     showToast('Welcome, Admin! Your account has been created.', 'success');
                     document.getElementById('setupForm').reset();
                 });
             })
-            .catch(err => {
+            .catch(function(err) {
                 let msg = 'Failed to create account. Please try again.';
                 if (err.code === 'auth/email-already-in-use') msg = 'This email is already registered.';
                 if (err.code === 'auth/invalid-email') msg = 'Invalid email address.';
                 if (err.code === 'auth/weak-password') msg = 'Password is too weak.';
                 errorEl.textContent = msg;
             })
-            .finally(() => {
+            .finally(function() {
                 btn.disabled = false;
                 btn.textContent = 'Create Admin Account';
             });
@@ -285,28 +258,24 @@ const app = (function() {
 
     function handleLogout() {
         showLoading('Signing out...');
-        // Detach all real-time listeners
         DB.detachAllListeners();
-        _unsubInventory = null;
-        _unsubSuppliers = null;
-        _unsubTransactions = null;
-        _unsubRecipes = null;
-        _unsubSettings = null;
+        unsubInventory = null;
+        unsubSuppliers = null;
+        unsubTransactions = null;
+        unsubRecipes = null;
+        unsubSettings = null;
 
-        Auth.logout().then(() => {
+        Auth.logout().then(function() {
             hideLoading();
             showLoginScreen();
             document.getElementById('loginForm').reset();
             document.getElementById('loginError').textContent = '';
-        }).catch(() => {
+        }).catch(function() {
             hideLoading();
             showLoginScreen();
         });
     }
 
-    // ==========================================
-    // USER DISPLAY
-    // ==========================================
     function updateUserDisplay() {
         const avatarEl = document.getElementById('userAvatar');
         const nameEl = document.querySelector('.user-name');
@@ -317,14 +286,10 @@ const app = (function() {
         if (roleEl) roleEl.textContent = Auth.getRoleLabel();
     }
 
-    // ==========================================
-    // ROLE-BASED UI
-    // ==========================================
     function applyRoleBasedUI() {
         const allowedPages = Auth.getAllowedPages();
 
-        // Show/hide nav links based on role
-        document.querySelectorAll('.nav-link[data-page]').forEach(link => {
+        document.querySelectorAll('.nav-link[data-page]').forEach(function(link) {
             const page = link.dataset.page;
             if (allowedPages.includes(page)) {
                 link.style.display = '';
@@ -333,24 +298,18 @@ const app = (function() {
             }
         });
 
-        // Show/hide nav sections that have no visible links
-        document.querySelectorAll('.nav-section').forEach(section => {
+        document.querySelectorAll('.nav-section').forEach(function(section) {
             const visibleLinks = section.querySelectorAll('.nav-link:not([style*="display: none"])');
             section.style.display = visibleLinks.length > 0 ? '' : 'none';
         });
 
-        // Hide user menu section in nav for non-admins
         const usersLink = document.querySelector('.nav-link[data-page="users"]');
         if (usersLink) {
             usersLink.style.display = Auth.isAdmin() ? '' : 'none';
         }
     }
 
-    // ==========================================
-    // NAVIGATION
-    // ==========================================
     function navigate(page) {
-        // Check permission
         if (!Auth.canAccessPage(page)) {
             showToast('You do not have permission to access this page.', 'error');
             return;
@@ -358,19 +317,15 @@ const app = (function() {
 
         currentPage = page;
 
-        // Hide all pages
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+        document.querySelectorAll('.nav-link').forEach(function(l) { l.classList.remove('active'); });
 
-        // Show selected page
         const pageEl = document.getElementById(page + 'Page');
         if (pageEl) pageEl.classList.add('active');
 
-        // Update nav
         const navLink = document.querySelector(`.nav-link[data-page="${page}"]`);
         if (navLink) navLink.classList.add('active');
 
-        // Update title
         const titles = {
             dashboard: 'Dashboard',
             inventory: 'Inventory',
@@ -386,11 +341,9 @@ const app = (function() {
         const titleEl = document.getElementById('pageTitle');
         if (titleEl) titleEl.textContent = titles[page] || page;
 
-        // Close sidebar on mobile
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('active');
 
-        // Render page content
         switch(page) {
             case 'dashboard': renderDashboard(); break;
             case 'inventory': InventoryModule.render(); break;
@@ -407,47 +360,35 @@ const app = (function() {
         window.scrollTo(0, 0);
     }
 
-    // ==========================================
-    // EVENT LISTENERS
-    // ==========================================
     function setupEventListeners() {
-        // Sidebar toggle
-        document.getElementById('menuToggle').addEventListener('click', () => {
+        document.getElementById('menuToggle').addEventListener('click', function() {
             document.getElementById('sidebar').classList.add('open');
             document.getElementById('sidebarOverlay').classList.add('active');
         });
-        document.getElementById('sidebarClose').addEventListener('click', () => {
+        document.getElementById('sidebarClose').addEventListener('click', function() {
             document.getElementById('sidebar').classList.remove('open');
             document.getElementById('sidebarOverlay').classList.remove('active');
         });
-        document.getElementById('sidebarOverlay').addEventListener('click', () => {
+        document.getElementById('sidebarOverlay').addEventListener('click', function() {
             document.getElementById('sidebar').classList.remove('open');
             document.getElementById('sidebarOverlay').classList.remove('active');
         });
 
-        // Theme toggle
         const themeBtn = document.getElementById('themeToggleBtn');
         if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 
-        // Nav links
-        document.querySelectorAll('.nav-link[data-page]').forEach(link => {
-            link.addEventListener('click', e => {
+        document.querySelectorAll('.nav-link[data-page]').forEach(function(link) {
+            link.addEventListener('click', function(e) {
                 e.preventDefault();
                 navigate(link.dataset.page);
             });
         });
 
-        // Login form
         document.getElementById('loginForm').addEventListener('submit', handleLogin);
-
-        // Setup form
         document.getElementById('setupForm').addEventListener('submit', handleSetup);
-
-        // Logout
         document.getElementById('logoutBtn').addEventListener('click', handleLogout);
 
-        // Global search
-        document.getElementById('globalSearch').addEventListener('input', debounce(e => {
+        document.getElementById('globalSearch').addEventListener('input', debounce(function(e) {
             const val = e.target.value.toLowerCase();
             if (val.length > 2) {
                 navigate('inventory');
@@ -457,31 +398,29 @@ const app = (function() {
             }
         }, 300));
 
-        // Inventory filters
-        document.getElementById('invSearch').addEventListener('input', debounce(e => {
+        document.getElementById('invSearch').addEventListener('input', debounce(function(e) {
             inventoryFilter.search = e.target.value.toLowerCase();
             inventoryPageNum = 1;
             InventoryModule.render();
         }, 200));
-        document.getElementById('invCategoryFilter').addEventListener('change', e => {
+        document.getElementById('invCategoryFilter').addEventListener('change', function(e) {
             inventoryFilter.category = e.target.value;
             inventoryPageNum = 1;
             InventoryModule.render();
         });
-        document.getElementById('invSupplierFilter').addEventListener('change', e => {
+        document.getElementById('invSupplierFilter').addEventListener('change', function(e) {
             inventoryFilter.supplier = e.target.value;
             inventoryPageNum = 1;
             InventoryModule.render();
         });
-        document.getElementById('invStatusFilter').addEventListener('change', e => {
+        document.getElementById('invStatusFilter').addEventListener('change', function(e) {
             inventoryFilter.status = e.target.value;
             inventoryPageNum = 1;
             InventoryModule.render();
         });
 
-        // Inventory sort
-        document.querySelectorAll('#inventoryTable thead th.sortable').forEach(th => {
-            th.addEventListener('click', () => {
+        document.querySelectorAll('#inventoryTable thead th.sortable').forEach(function(th) {
+            th.addEventListener('click', function() {
                 const field = th.dataset.sort;
                 if (inventorySort.field === field) {
                     inventorySort.dir = inventorySort.dir === 'asc' ? 'desc' : 'asc';
@@ -489,7 +428,7 @@ const app = (function() {
                     inventorySort.field = field;
                     inventorySort.dir = 'asc';
                 }
-                document.querySelectorAll('#inventoryTable thead th.sortable').forEach(t => {
+                document.querySelectorAll('#inventoryTable thead th.sortable').forEach(function(t) {
                     t.classList.remove('asc', 'desc');
                 });
                 th.classList.add(inventorySort.dir);
@@ -497,36 +436,32 @@ const app = (function() {
             });
         });
 
-        // Receive form
-        document.getElementById('receiveForm').addEventListener('submit', e => {
+        document.getElementById('receiveForm').addEventListener('submit', function(e) {
             e.preventDefault();
             InventoryModule.submitReceive();
         });
 
-        // Transfer form
-        document.getElementById('transferForm').addEventListener('submit', e => {
+        document.getElementById('transferForm').addEventListener('submit', function(e) {
             e.preventDefault();
             InventoryModule.submitTransfer();
         });
 
-        // Adjustment form
-        document.getElementById('adjustForm').addEventListener('submit', e => {
+        document.getElementById('adjustForm').addEventListener('submit', function(e) {
             e.preventDefault();
             InventoryModule.submitAdjustment();
         });
 
-        document.getElementById('adjustItem').addEventListener('change', () => {
+        document.getElementById('adjustItem').addEventListener('change', function() {
             InventoryModule.updateAdjustCurrentQty();
         });
-        document.getElementById('adjustLocation').addEventListener('change', () => {
+        document.getElementById('adjustLocation').addEventListener('change', function() {
             InventoryModule.updateAdjustCurrentQty();
         });
 
-        // Transfer tabs
-        document.querySelectorAll('.transfer-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.transfer-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.transfer-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.transfer-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.transfer-tab').forEach(function(t) { t.classList.remove('active'); });
+                document.querySelectorAll('.transfer-panel').forEach(function(p) { p.classList.remove('active'); });
                 tab.classList.add('active');
                 const panelId = 'transfer' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1) + 'Panel';
                 const panel = document.getElementById(panelId);
@@ -535,11 +470,10 @@ const app = (function() {
             });
         });
 
-        // Report tabs
-        document.querySelectorAll('.report-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.report-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.report-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.report-tab').forEach(function(t) { t.classList.remove('active'); });
+                document.querySelectorAll('.report-panel').forEach(function(p) { p.classList.remove('active'); });
                 tab.classList.add('active');
                 const reportId = 'report' + tab.dataset.report.charAt(0).toUpperCase() + tab.dataset.report.slice(1);
                 const panel = document.getElementById(reportId);
@@ -548,29 +482,24 @@ const app = (function() {
             });
         });
 
-        // Report transaction filters
-        document.getElementById('reportTransType').addEventListener('change', () => ReportsModule.renderTransactions());
-        document.getElementById('reportTransFrom').addEventListener('change', () => ReportsModule.renderTransactions());
-        document.getElementById('reportTransTo').addEventListener('change', () => ReportsModule.renderTransactions());
+        document.getElementById('reportTransType').addEventListener('change', function() { ReportsModule.renderTransactions(); });
+        document.getElementById('reportTransFrom').addEventListener('change', function() { ReportsModule.renderTransactions(); });
+        document.getElementById('reportTransTo').addEventListener('change', function() { ReportsModule.renderTransactions(); });
 
-        // Transfer history filters
-        document.getElementById('transferFromFilter').addEventListener('change', () => renderTransferHistory());
-        document.getElementById('transferToFilter').addEventListener('change', () => renderTransferHistory());
-        document.getElementById('transferDateFilter').addEventListener('change', () => renderTransferHistory());
+        document.getElementById('transferFromFilter').addEventListener('change', function() { renderTransferHistory(); });
+        document.getElementById('transferToFilter').addEventListener('change', function() { renderTransferHistory(); });
+        document.getElementById('transferDateFilter').addEventListener('change', function() { renderTransferHistory(); });
 
-        // Supplier search
-        document.getElementById('supplierSearch').addEventListener('input', debounce(e => {
+        document.getElementById('supplierSearch').addEventListener('input', debounce(function(e) {
             SuppliersModule.render(e.target.value.toLowerCase());
         }, 200));
 
-        // Recipe search
-        document.getElementById('recipeSearch').addEventListener('input', debounce(e => {
+        document.getElementById('recipeSearch').addEventListener('input', debounce(function(e) {
             RecipesModule.render(e.target.value.toLowerCase());
         }, 200));
 
-        // Close modals on overlay click
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', e => {
+        document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+            overlay.addEventListener('click', function(e) {
                 if (e.target === overlay) {
                     overlay.classList.remove('active');
                     document.body.style.overflow = '';
@@ -578,10 +507,9 @@ const app = (function() {
             });
         });
 
-        // Close modals on Escape key
-        document.addEventListener('keydown', e => {
+        document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                document.querySelectorAll('.modal-overlay.active').forEach(m => {
+                document.querySelectorAll('.modal-overlay.active').forEach(function(m) {
                     m.classList.remove('active');
                 });
                 document.body.style.overflow = '';
@@ -593,14 +521,13 @@ const app = (function() {
     // DASHBOARD
     // ==========================================
     function renderDashboard() {
-        const items = _inventoryData;
-        const transactions = _transactionsData;
+        const items = cacheInventory;
+        const transactions = cacheTransactions;
 
-        // Stats calculations
         let inventoryValue = 0;
         let lowStock = 0;
         let criticalStock = 0;
-        items.forEach(item => {
+        items.forEach(function(item) {
             const total = (item.qtyWarehouse || 0) + (item.qtyBamban || 0) + (item.qtyCapas || 0);
             inventoryValue += total * (item.cost || 0);
             const status = getStatus(item);
@@ -609,17 +536,15 @@ const app = (function() {
         });
 
         const today = todayStr();
-        const todayTxs = transactions.filter(t => t.date === today);
+        const todayTxs = transactions.filter(function(t) { return t.date === today; });
 
-        // Update stat cards
         document.getElementById('dashInventoryValue').textContent = formatCurrency(inventoryValue);
         document.getElementById('dashTotalProducts').textContent = items.length;
         document.getElementById('dashLowStock').textContent = lowStock;
         document.getElementById('dashCriticalStock').textContent = criticalStock;
         document.getElementById('dashTodayTransactions').textContent = todayTxs.length;
-        document.getElementById('dashPendingTransfers').textContent = transactions.filter(t => t.type === 'Transfer' && t.date === today).length;
+        document.getElementById('dashPendingTransfers').textContent = transactions.filter(function(t) { return t.type === 'Transfer' && t.date === today; }).length;
 
-        // Notification badge
         const totalAlerts = lowStock + criticalStock;
         const badge = document.getElementById('notifBadge');
         if (badge) {
@@ -627,8 +552,7 @@ const app = (function() {
             badge.style.display = totalAlerts > 0 ? 'flex' : 'none';
         }
 
-        // Low stock table (no SKU column)
-        const lowStockItems = items.filter(i => {
+        const lowStockItems = items.filter(function(i) {
             const s = getStatus(i);
             return s === 'Low' || s === 'Critical';
         }).slice(0, 8);
@@ -638,7 +562,7 @@ const app = (function() {
             if (lowStockItems.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No low stock items</p></td></tr>';
             } else {
-                tbody.innerHTML = lowStockItems.map(item => {
+                tbody.innerHTML = lowStockItems.map(function(item) {
                     const status = getStatus(item);
                     const statusClass = status === 'Critical' ? 'badge-critical' : 'badge-low';
                     return `<tr>
@@ -652,14 +576,13 @@ const app = (function() {
             }
         }
 
-        // Recent activity
         const recentTxs = transactions.slice(0, 12);
         const activityList = document.getElementById('dashActivityList');
         if (activityList) {
             if (recentTxs.length === 0) {
                 activityList.innerHTML = '<div class="empty-state"><p>No recent activity</p></div>';
             } else {
-                activityList.innerHTML = recentTxs.map(tx => {
+                activityList.innerHTML = recentTxs.map(function(tx) {
                     let iconBg, iconColor, actionText;
                     switch(tx.type) {
                         case 'Receive':
@@ -710,10 +633,9 @@ const app = (function() {
             }
         }
 
-        // Branch summary
         let wTotal = 0, bTotal = 0, cTotal = 0;
         let wVal = 0, bVal = 0, cVal = 0;
-        items.forEach(item => {
+        items.forEach(function(item) {
             wTotal += item.qtyWarehouse || 0;
             bTotal += item.qtyBamban || 0;
             cTotal += item.qtyCapas || 0;
@@ -722,7 +644,7 @@ const app = (function() {
             cVal += (item.qtyCapas || 0) * (item.cost || 0);
         });
 
-        const settings = _settingsData;
+        const settings = cacheSettings;
         const whName = settings.warehouseName || 'Warehouse';
         const branchSummaryEl = document.getElementById('dashBranchSummary');
         if (branchSummaryEl) {
@@ -763,22 +685,24 @@ const app = (function() {
     }
 
     function renderRecentDeliveries() {
-        const transactions = _transactionsData;
-        const receives = transactions.filter(t => t.type === 'Receive').slice(0, 10);
+        const transactions = cacheTransactions;
+        const receives = transactions.filter(function(t) { return t.type === 'Receive'; }).slice(0, 10);
         const tbody = document.getElementById('recentDeliveriesTable');
         if (tbody) {
             if (receives.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>No recent deliveries</p></td></tr>';
             } else {
-                tbody.innerHTML = receives.map(tx => `<tr>
-                    <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
-                    <td>${formatDate(tx.date)}</td>
-                    <td>${escapeHtml(tx.supplierName || '-')}</td>
-                    <td>${escapeHtml(tx.itemName)}</td>
-                    <td class="text-right">${tx.qty}</td>
-                    <td>${escapeHtml(tx.to || '-')}</td>
-                    <td>${escapeHtml(tx.user || 'System')}</td>
-                </tr>`).join('');
+                tbody.innerHTML = receives.map(function(tx) {
+                    return `<tr>
+                        <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
+                        <td>${formatDate(tx.date)}</td>
+                        <td>${escapeHtml(tx.supplierName || '-')}</td>
+                        <td>${escapeHtml(tx.itemName)}</td>
+                        <td class="text-right">${tx.qty}</td>
+                        <td>${escapeHtml(tx.to || '-')}</td>
+                        <td>${escapeHtml(tx.user || 'System')}</td>
+                    </tr>`;
+                }).join('');
             }
         }
     }
@@ -795,31 +719,33 @@ const app = (function() {
     }
 
     function renderTransferHistory() {
-        let transactions = _transactionsData.filter(t => t.type === 'Transfer');
+        let transactions = cacheTransactions.filter(function(t) { return t.type === 'Transfer'; });
 
         const fromFilter = document.getElementById('transferFromFilter').value;
         const toFilter = document.getElementById('transferToFilter').value;
         const dateFilter = document.getElementById('transferDateFilter').value;
 
-        if (fromFilter) transactions = transactions.filter(t => t.from === fromFilter);
-        if (toFilter) transactions = transactions.filter(t => t.to === toFilter);
-        if (dateFilter) transactions = transactions.filter(t => t.date === dateFilter);
+        if (fromFilter) transactions = transactions.filter(function(t) { return t.from === fromFilter; });
+        if (toFilter) transactions = transactions.filter(function(t) { return t.to === toFilter; });
+        if (dateFilter) transactions = transactions.filter(function(t) { return t.date === dateFilter; });
 
         const tbody = document.getElementById('transferHistoryTable');
         if (tbody) {
             if (transactions.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>No transfer records</p></td></tr>';
             } else {
-                tbody.innerHTML = transactions.slice(0, 50).map(tx => `<tr>
-                    <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
-                    <td>${formatDate(tx.date)}</td>
-                    <td>${escapeHtml(tx.from)}</td>
-                    <td>${escapeHtml(tx.to)}</td>
-                    <td>${escapeHtml(tx.itemName)}</td>
-                    <td class="text-right">${tx.qty}</td>
-                    <td><span class="badge-status badge-completed">Completed</span></td>
-                    <td>${escapeHtml(tx.user || 'System')}</td>
-                </tr>`).join('');
+                tbody.innerHTML = transactions.slice(0, 50).map(function(tx) {
+                    return `<tr>
+                        <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
+                        <td>${formatDate(tx.date)}</td>
+                        <td>${escapeHtml(tx.from)}</td>
+                        <td>${escapeHtml(tx.to)}</td>
+                        <td>${escapeHtml(tx.itemName)}</td>
+                        <td class="text-right">${tx.qty}</td>
+                        <td><span class="badge-status badge-completed">Completed</span></td>
+                        <td>${escapeHtml(tx.user || 'System')}</td>
+                    </tr>`;
+                }).join('');
             }
         }
     }
@@ -828,9 +754,9 @@ const app = (function() {
     // BRANCHES PAGE
     // ==========================================
     function renderBranches() {
-        const items = _inventoryData;
-        const transactions = _transactionsData;
-        const settings = _settingsData;
+        const items = cacheInventory;
+        const transactions = cacheTransactions;
+        const settings = cacheSettings;
         const whName = settings.warehouseName || 'Main Warehouse';
 
         const branches = [
@@ -841,9 +767,9 @@ const app = (function() {
 
         const branchesGridEl = document.getElementById('branchesGrid');
         if (branchesGridEl) {
-            branchesGridEl.innerHTML = branches.map(b => {
+            branchesGridEl.innerHTML = branches.map(function(b) {
                 let totalItems = 0, totalQty = 0, totalValue = 0, lowStock = 0;
-                items.forEach(item => {
+                items.forEach(function(item) {
                     const qty = item[b.qtyKey] || 0;
                     if (qty > 0) totalItems++;
                     totalQty += qty;
@@ -851,9 +777,9 @@ const app = (function() {
                     if (qty <= (item.reorderLevel || settings.reorderLevel || 10)) lowStock++;
                 });
 
-                const recentTxs = transactions.filter(t =>
-                    (t.from === b.key || t.to === b.key)
-                ).slice(0, 5);
+                const recentTxs = transactions.filter(function(t) {
+                    return (t.from === b.key || t.to === b.key);
+                }).slice(0, 5);
 
                 return `<div class="branch-card">
                     <div class="branch-card-header">
@@ -881,20 +807,21 @@ const app = (function() {
                         <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light);">
                             <div style="font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Recent Transactions</div>
                             ${recentTxs.length === 0 ? '<span style="font-size: 12px; color: var(--text-muted);">No recent activity</span>' :
-                                recentTxs.map(tx => `<div style="font-size: 12px; color: var(--text); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                                    <span>${escapeHtml(tx.itemName)} - ${tx.qty} ${tx.unit || ''}</span>
-                                    <span style="color: var(--text-muted);">${formatDate(tx.date)}</span>
-                                </div>`).join('')}
+                                recentTxs.map(function(tx) {
+                                    return `<div style="font-size: 12px; color: var(--text); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                                        <span>${escapeHtml(tx.itemName)} - ${tx.qty} ${tx.unit || ''}</span>
+                                        <span style="color: var(--text-muted);">${formatDate(tx.date)}</span>
+                                    </div>`;
+                                }).join('')}
                         </div>
                     </div>
                 </div>`;
             }).join('');
         }
 
-        // Branch comparison table (no SKU)
         const compTable = document.getElementById('branchComparisonTable');
         if (compTable) {
-            compTable.innerHTML = items.map(item => {
+            compTable.innerHTML = items.map(function(item) {
                 const total = (item.qtyWarehouse || 0) + (item.qtyBamban || 0) + (item.qtyCapas || 0);
                 return `<tr>
                     <td><strong>${escapeHtml(item.name)}</strong></td>
@@ -916,7 +843,7 @@ const app = (function() {
             return;
         }
 
-        DB.users.getAll(users => {
+        DB.users.getAll(function(users) {
             const container = document.getElementById('usersTableBody');
             if (!container) return;
             if (!users || users.length === 0) {
@@ -924,7 +851,7 @@ const app = (function() {
                 return;
             }
 
-            container.innerHTML = users.map(u => {
+            container.innerHTML = users.map(function(u) {
                 const roleClass = u.role === 'admin' ? 'badge-critical' : u.role === 'staff' ? 'badge-healthy' : 'badge-pending';
                 const statusClass = u.isActive === false ? 'badge-critical' : 'badge-healthy';
                 const isCurrentUser = u.uid === Auth.getUser()?.uid;
@@ -993,19 +920,19 @@ const app = (function() {
         btn.textContent = 'Creating...';
 
         Auth.createUser(email, password, displayName, role)
-            .then(() => {
+            .then(function() {
                 showToast(`User "${displayName}" created`, 'success');
                 closeModal('addUserModal');
                 renderUsers();
             })
-            .catch(err => {
+            .catch(function(err) {
                 let msg = err.message || 'Failed to create user.';
                 if (err.code === 'auth/email-already-in-use') msg = 'This email is already registered.';
                 if (err.code === 'auth/invalid-email') msg = 'Invalid email address.';
                 if (err.code === 'auth/weak-password') msg = 'Password is too weak.';
                 errorEl.textContent = msg;
             })
-            .finally(() => {
+            .finally(function() {
                 btn.disabled = false;
                 btn.textContent = 'Create User';
             });
@@ -1017,9 +944,9 @@ const app = (function() {
             showToast('You cannot change your own role.', 'error');
             return;
         }
-        Auth.updateUserRole(uid, newRole).then(() => {
+        Auth.updateUserRole(uid, newRole).then(function() {
             showToast('User role updated', 'success');
-        }).catch(err => {
+        }).catch(function(err) {
             showToast('Failed to update role: ' + err.message, 'error');
         });
     }
@@ -1033,10 +960,10 @@ const app = (function() {
         const action = currentlyActive ? 'deactivate' : 'activate';
         const method = currentlyActive ? Auth.deactivateUser : Auth.activateUser;
         if (confirm(`Are you sure you want to ${action} this user?`)) {
-            method.call(Auth, uid).then(() => {
+            method.call(Auth, uid).then(function() {
                 showToast(`User ${action}d`, 'success');
                 renderUsers();
-            }).catch(err => {
+            }).catch(function(err) {
                 showToast('Failed: ' + err.message, 'error');
             });
         }
@@ -1061,12 +988,11 @@ const app = (function() {
     }
 
     function formatCurrency(val) {
-        const settings = _settingsData;
+        const settings = cacheSettings;
         const sym = settings.currency || '\u20B1';
         return sym + parseFloat(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // Explicitly using string representation here to bypass unnecessary LaTeX syntax rules for regular formatting
     function todayStr() {
         return new Date().toISOString().split('T')[0];
     }
@@ -1078,14 +1004,14 @@ const app = (function() {
 
     function getStatus(item) {
         const total = (item.qtyWarehouse || 0) + (item.qtyBamban || 0) + (item.qtyCapas || 0);
-        const reorder = item.reorderLevel || _settingsData.reorderLevel || 10;
+        const reorder = item.reorderLevel || cacheSettings.reorderLevel || 10;
         if (total <= reorder * 0.5) return 'Critical';
         if (total <= reorder) return 'Low';
         return 'Healthy';
     }
 
     function getSupplierName(id) {
-        const s = _suppliersData.find(s => s.id === id || s._key === id);
+        const s = cacheSuppliers.find(function(sup) { return sup.id === id || sup._key === id; });
         return s ? s.name : id;
     }
 
@@ -1098,7 +1024,8 @@ const app = (function() {
         let timer;
         return function(...args) {
             clearTimeout(timer);
-            timer = setTimeout(() => fn.apply(this, args), ms);
+            const context = this;
+            timer = setTimeout(function() { fn.apply(context, args); }, ms);
         };
     }
 
@@ -1138,9 +1065,9 @@ const app = (function() {
             <button class="toast-close" aria-label="Close notification" onclick="this.parentElement.remove()">&times;</button>
         `;
         container.appendChild(toast);
-        setTimeout(() => {
+        setTimeout(function() {
             toast.classList.add('hiding');
-            setTimeout(() => toast.remove(), 300);
+            setTimeout(function() { toast.remove(); }, 300);
         }, 4000);
     }
 
@@ -1180,7 +1107,7 @@ const app = (function() {
     }
 
     function storeThemePreference(theme) {
-        try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch (e) { /* private mode etc - ignore */ }
+        try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch (e) {}
     }
 
     function applyTheme(theme) {
@@ -1211,7 +1138,7 @@ const app = (function() {
     }
 
     function downloadCSV(headers, rows, filename) {
-        const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+        const csv = [headers.join(','), ...rows.map(function(r) { return r.map(function(c) { return `"${String(c).replace(/"/g, '""')}"`; }).join(','); })].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1222,66 +1149,62 @@ const app = (function() {
     }
 
     // ==========================================
-    // DATA ACCESSORS (for other modules)
+    // DATA ACCESSORS
     // ==========================================
-    function getInventoryData() { return _inventoryData; }
-    function getSuppliersData() { return _suppliersData; }
-    function getTransactionsData() { return _transactionsData; }
-    function getRecipesData() { return _recipesData; }
-    function getSettingsData() { return _settingsData; }
+    function getInventoryData() { return cacheInventory; }
+    function getSuppliersData() { return cacheSuppliers; }
+    function getTransactionsData() { return cacheTransactions; }
+    function getRecipesData() { return cacheRecipes; }
+    function getSettingsData() { return cacheSettings; }
     function getInventorySort() { return inventorySort; }
     function getInventoryFilter() { return inventoryFilter; }
     function getInventoryPageNum() { return inventoryPageNum; }
     function setInventoryPageNum(p) { inventoryPageNum = p; }
     function getInventoryPerPage() { return inventoryPerPage; }
 
-    // ==========================================
-    // PUBLIC API
-    // ==========================================
     return {
-        init,
-        navigate,
-        showToast,
-        openModal,
-        closeModal,
-        showLoading,
-        hideLoading,
-        genId,
-        genRefNum,
-        formatDate,
-        formatCurrency,
-        todayStr,
-        nowTimeStr,
-        getStatus,
-        getSupplierName,
-        escapeHtml,
-        debounce,
-        downloadCSV,
-        getInventoryData,
-        getSuppliersData,
-        getTransactionsData,
-        getRecipesData,
-        getSettingsData,
-        getInventorySort,
-        getInventoryFilter,
-        getInventoryPageNum,
-        setInventoryPageNum,
-        getInventoryPerPage,
-        renderReceive,
-        renderRecentDeliveries,
-        renderTransfer,
-        renderTransferHistory,
-        updateRefNumbers,
-        changeUserRole,
-        toggleUserActive,
-        renderUsers,
-        addUser,
-        saveNewUser,
-        applyTheme,
-        setThemePreference,
-        toggleTheme
+        init: init,
+        navigate: navigate,
+        showToast: showToast,
+        openModal: openModal,
+        closeModal: closeModal,
+        showLoading: showLoading,
+        hideLoading: hideLoading,
+        genId: genId,
+        genRefNum: genRefNum,
+        formatDate: formatDate,
+        formatCurrency: formatCurrency,
+        todayStr: todayStr,
+        nowTimeStr: nowTimeStr,
+        getStatus: getStatus,
+        getSupplierName: getSupplierName,
+        escapeHtml: escapeHtml,
+        debounce: debounce,
+        downloadCSV: downloadCSV,
+        getInventoryData: getInventoryData,
+        getSuppliersData: getSuppliersData,
+        getTransactionsData: getTransactionsData,
+        getRecipesData: getRecipesData,
+        getSettingsData: getSettingsData,
+        getInventorySort: getInventorySort,
+        getInventoryFilter: getInventoryFilter,
+        getInventoryPageNum: getInventoryPageNum,
+        setInventoryPageNum: setInventoryPageNum,
+        getInventoryPerPage: getInventoryPerPage,
+        renderReceive: renderReceive,
+        renderRecentDeliveries: renderRecentDeliveries,
+        renderTransfer: renderTransfer,
+        renderTransferHistory: renderTransferHistory,
+        updateRefNumbers: updateRefNumbers,
+        changeUserRole: changeUserRole,
+        toggleUserActive: toggleUserActive,
+        renderUsers: renderUsers,
+        addUser: addUser,
+        saveNewUser: saveNewUser,
+        applyTheme: applyTheme,
+        setThemePreference: setThemePreference,
+        toggleTheme: toggleTheme
     };
 })();
 
-// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', app.init);

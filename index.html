@@ -16,36 +16,32 @@
          ========================================== -->
 
     <!-- Firebase Configuration Screen -->
-    <div class="auth-container" id="configContainer" style="display:none;">
-        <div class="auth-card" style="max-width:520px;">
-            <div class="auth-logo">
-                <div class="logo-icon" style="width:56px;height:56px;font-size:24px;">A</div>
-                <div class="auth-title">Akasya Coffee</div>
-                <div class="auth-subtitle">Inventory System</div>
+   <div class="auth-container" id="loginContainer" style="display:none;">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <div class="logo-icon" style="width:56px;height:56px;font-size:24px;">A</div>
+            <div class="auth-title">Akasya Coffee</div>
+            <div class="auth-subtitle">Inventory Management System</div>
+        </div>
+        <form class="auth-form" id="loginForm" novalidate onsubmit="event.preventDefault();">
+            <div class="form-group">
+                <label class="form-label" for="loginEmail">Email</label>
+                <input type="email" class="form-input" id="loginEmail" required placeholder="your@email.com" autocomplete="email" aria-describedby="loginError">
             </div>
-            <div class="auth-form">
-                <div class="form-group">
-                    <label class="form-label">Firebase Configuration Required</label>
-                    <p style="font-size:13px;color:var(--text-light);line-height:1.6;margin-bottom:16px;">
-                        Before using the system, you need to configure your Firebase project.
-                        Please follow the steps below:
-                    </p>
-                    <ol style="font-size:13px;color:var(--text-light);line-height:1.8;margin-left:20px;margin-bottom:20px;">
-                        <li>Go to <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--primary);">Firebase Console</a></li>
-                        <li>Create a new project or use an existing one</li>
-                        <li>Enable Authentication (Email/Password sign-in method)</li>
-                        <li>Create a Realtime Database</li>
-                        <li>Copy your Firebase config object</li>
-                        <li>Paste it into <code>js/database.js</code> file, replacing the placeholder values</li>
-                    </ol>
-                    <div class="form-note" style="margin-bottom:0;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                        After updating the config, refresh this page to continue.
-                    </div>
-                </div>
+            <div class="form-group">
+                <label class="form-label" for="loginPassword">Password</label>
+                <input type="password" class="form-input" id="loginPassword" required placeholder="Enter your password" autocomplete="current-password" aria-describedby="loginError">
             </div>
+            <div class="auth-error" id="loginError" role="alert" aria-live="assertive"></div>
+            
+            <button type="button" class="btn btn-primary btn-lg" id="loginBtn" style="width:100%;">Sign In</button>
+        </form>
+        <div class="auth-footer">
+            <p>Akasya Coffee Inventory System v3.0</p>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">Powered by Firebase Realtime Database</p>
         </div>
     </div>
+</div>
 
     <!-- Login Screen -->
     <div class="auth-container" id="loginContainer" style="display:none;">

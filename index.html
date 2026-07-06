@@ -55,7 +55,7 @@
                 <div class="auth-title">Akasya Coffee</div>
                 <div class="auth-subtitle">Inventory Management System</div>
             </div>
-            <form class="auth-form" id="loginForm" novalidate>
+            <form class="auth-form" id="loginForm" novalidate onsubmit="event.preventDefault();">
                 <div class="form-group">
                     <label class="form-label" for="loginEmail">Email</label>
                     <input type="email" class="form-input" id="loginEmail" required placeholder="your@email.com" autocomplete="email" aria-describedby="loginError">

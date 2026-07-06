@@ -407,36 +407,36 @@ const InventoryModule = (function() {
 
             const field = branchField[r.branch];
 
-            // Atomically add to the destination quantity. Using a Firebase
-            // transaction (instead of reading the cached qty and writing
-            // qty+delta) means this is safe even if the same item appears
-            // twice in this form, or another user/tab changes the same
-            // item's stock at the same moment - neither update gets lost.
-            promises.push(DB.inventory.adjustQty(r.itemId, field, r.qty, { allowNegative: true }));
-
-            // Non-quantity metadata can use a normal update
+            // Atomically add to the destination quantity. Non-quantity updates
+            // and transaction log tracking now follow sequentially under structural execution.
             const meta = { updatedAt: new Date().toISOString() };
             if (r.cost > 0) meta.cost = r.cost;
-            promises.push(DB.inventory.update(r.itemId, meta));
 
-            // Create transaction record
-            promises.push(DB.transactions.create({
-                date,
-                time: app.nowTimeStr(),
-                type: 'Receive',
-                itemId: r.itemId,
-                itemName: item.name,
-                qty: r.qty,
-                unit: item.unit,
-                to: r.branch,
-                supplierId,
-                supplierName,
-                refNum,
-                user: Auth.getDisplayName(),
-                userId: Auth.getUser()?.uid || '',
-                notes,
-                unitCost: r.cost || item.cost || 0
-            }));
+            const receiveSequence = DB.inventory.adjustQty(r.itemId, field, r.qty, { allowNegative: true })
+                .then(() => {
+                    return Promise.all([
+                        DB.inventory.update(r.itemId, meta),
+                        DB.transactions.create({
+                            date,
+                            time: app.nowTimeStr(),
+                            type: 'Receive',
+                            itemId: r.itemId,
+                            itemName: item.name,
+                            qty: r.qty,
+                            unit: item.unit,
+                            to: r.branch,
+                            supplierId,
+                            supplierName,
+                            refNum,
+                            user: Auth.getDisplayName(),
+                            userId: Auth.getUser()?.uid || '',
+                            notes,
+                            unitCost: r.cost || item.cost || 0
+                        })
+                    ]);
+                });
+
+            promises.push(receiveSequence);
         });
 
         Promise.all(promises).then(() => {
@@ -506,7 +506,7 @@ const InventoryModule = (function() {
                 <input type="number" class="form-input transfer-qty" min="1" placeholder="0" required>
             </div>
             <button type="button" class="btn-icon remove-item" onclick="InventoryModule.removeTransferItem(this)" aria-label="Remove item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
         `;
         container.appendChild(newRow);
@@ -592,32 +592,34 @@ const InventoryModule = (function() {
             const fromField = branchField[from];
             const toField = branchField[to];
 
-            // Deduct from source, then add to destination - both atomic
-            // transactions. Deducting first and chaining the add means we
-            // never end up crediting the destination if the source didn't
-            // actually have enough stock (the deduct transaction aborts if
-            // it would go negative).
-            const transferPromise = DB.inventory.adjustQty(t.itemId, fromField, -t.qty)
-                .then(() => DB.inventory.adjustQty(t.itemId, toField, t.qty, { allowNegative: true }));
-            promises.push(transferPromise);
-            promises.push(DB.inventory.update(t.itemId, { updatedAt: new Date().toISOString() }));
+            // FIXED: Metadata and log writing are securely locked down inside 
+            // a sequential .then() promise chain, executing only after the 
+            // atomic resource adjustments verify balance deduction availability.
+            const transferSequence = DB.inventory.adjustQty(t.itemId, fromField, -t.qty)
+                .then(() => DB.inventory.adjustQty(t.itemId, toField, t.qty, { allowNegative: true }))
+                .then(() => {
+                    return Promise.all([
+                        DB.inventory.update(t.itemId, { updatedAt: new Date().toISOString() }),
+                        DB.transactions.create({
+                            date,
+                            time: app.nowTimeStr(),
+                            type: 'Transfer',
+                            itemId: t.itemId,
+                            itemName: item.name,
+                            qty: t.qty,
+                            unit: item.unit,
+                            from,
+                            to,
+                            refNum,
+                            user: Auth.getDisplayName(),
+                            userId: Auth.getUser()?.uid || '',
+                            notes,
+                            unitCost: item.cost || 0
+                        })
+                    ]);
+                });
 
-            promises.push(DB.transactions.create({
-                date,
-                time: app.nowTimeStr(),
-                type: 'Transfer',
-                itemId: t.itemId,
-                itemName: item.name,
-                qty: t.qty,
-                unit: item.unit,
-                from,
-                to,
-                refNum,
-                user: Auth.getDisplayName(),
-                userId: Auth.getUser()?.uid || '',
-                notes,
-                unitCost: item.cost || 0
-            }));
+            promises.push(transferSequence);
         });
 
         Promise.all(promises).then(() => {
@@ -702,8 +704,7 @@ const InventoryModule = (function() {
             return;
         }
 
-        // Check current qty (quick client-side check for immediate feedback -
-        // the atomic transaction below is the real safety net against races)
+        // Quick verification using the local snapshot value cache
         let currentQty = 0;
         if (location === 'Warehouse') currentQty = item.qtyWarehouse || 0;
         else if (location === 'Bamban') currentQty = item.qtyBamban || 0;
@@ -717,37 +718,43 @@ const InventoryModule = (function() {
         const branchField = { Warehouse: 'qtyWarehouse', Bamban: 'qtyBamban', Capas: 'qtyCapas' };
         const field = branchField[location];
 
-        Promise.all([
-            DB.inventory.adjustQty(itemId, field, -qty),
-            DB.inventory.update(itemId, { updatedAt: new Date().toISOString() }),
-            DB.transactions.create({
-                date,
-                time: app.nowTimeStr(),
-                type,
-                itemId,
-                itemName: item.name,
-                qty,
-                unit: item.unit,
-                from: location,
-                refNum,
-                reason: notes,
-                user: Auth.getDisplayName(),
-                userId: Auth.getUser()?.uid || '',
-                notes,
-                unitCost: item.cost || 0
+        // FIXED: Rebuilt promise structure into sequential order to protect transaction processing 
+        // patterns. Metadata updates and ledger log items write ONLY after the structural atomic balance operation passes.
+        DB.inventory.adjustQty(itemId, field, -qty)
+            .then(() => {
+                return Promise.all([
+                    DB.inventory.update(itemId, { updatedAt: new Date().toISOString() }),
+                    DB.transactions.create({
+                        date,
+                        time: app.nowTimeStr(),
+                        type,
+                        itemId,
+                        itemName: item.name,
+                        qty,
+                        unit: item.unit,
+                        from: location,
+                        refNum,
+                        reason: notes,
+                        user: Auth.getDisplayName(),
+                        userId: Auth.getUser()?.uid || '',
+                        notes,
+                        unitCost: item.cost || 0
+                    })
+                ]);
             })
-        ]).then(() => {
-            app.showToast(`${type} recorded: ${qty} ${item.unit} of ${item.name}`, 'success');
-            document.getElementById('adjustForm').reset();
-            document.getElementById('adjustDate').value = app.todayStr();
-            document.getElementById('adjustCurrentQty').value = '-';
-            app.updateRefNumbers();
-        }).catch(err => {
-            const msg = err.aborted
-                ? 'Adjustment failed: stock changed before this could complete (insufficient quantity). Please review and try again.'
-                : 'Error recording adjustment: ' + err.message;
-            app.showToast(msg, 'error');
-        });
+            .then(() => {
+                app.showToast(`${type} recorded: ${qty} ${item.unit} of ${item.name}`, 'success');
+                document.getElementById('adjustForm').reset();
+                document.getElementById('adjustDate').value = app.todayStr();
+                document.getElementById('adjustCurrentQty').value = '-';
+                app.updateRefNumbers();
+            })
+            .catch(err => {
+                const msg = err.aborted
+                    ? 'Adjustment failed: stock changed before this could complete (insufficient quantity). Please review and try again.'
+                    : 'Error recording adjustment: ' + err.message;
+                app.showToast(msg, 'error');
+            });
     }
 
     // ==========================================

@@ -14,7 +14,6 @@ const app = (function() {
     let inventoryFilter = { search: '', category: '', supplier: '', status: '' };
     let inventoryPageNum = 1;
     const inventoryPerPage = 15;
-    let confirmCallback = null;
     let _dataReady = false;
 
     // Cache for real-time data
@@ -52,8 +51,11 @@ const app = (function() {
             if (firebaseUser) {
                 // User is logged in - check if active
                 if (Auth.getProfile() && Auth.getProfile().isActive === false) {
-                    showLoginScreen();
-                    showToast('Your account has been deactivated. Contact an admin.', 'error');
+                    // FIXED: Clears invalid authorization token out of Firebase context to prevent layout routing loops.
+                    Auth.logout().then(() => {
+                        showLoginScreen();
+                        showToast('Your account has been deactivated. Contact an admin.', 'error');
+                    });
                     return;
                 }
                 setupApp();
@@ -202,6 +204,14 @@ const app = (function() {
 
         Auth.login(email, password)
             .then(() => {
+                // Re-verify account suspension state immediately upon successful manual sign in 
+                if (Auth.getProfile() && Auth.getProfile().isActive === false) {
+                    Auth.logout().then(() => {
+                        showLoginScreen();
+                        errorEl.textContent = 'Your account has been deactivated. Contact an admin.';
+                    });
+                    return;
+                }
                 setupApp();
                 document.getElementById('loginForm').reset();
             })
@@ -612,8 +622,10 @@ const app = (function() {
         // Notification badge
         const totalAlerts = lowStock + criticalStock;
         const badge = document.getElementById('notifBadge');
-        badge.textContent = totalAlerts;
-        badge.style.display = totalAlerts > 0 ? 'flex' : 'none';
+        if (badge) {
+            badge.textContent = totalAlerts;
+            badge.style.display = totalAlerts > 0 ? 'flex' : 'none';
+        }
 
         // Low stock table (no SKU column)
         const lowStockItems = items.filter(i => {
@@ -622,76 +634,80 @@ const app = (function() {
         }).slice(0, 8);
 
         const tbody = document.getElementById('dashLowStockTable');
-        if (lowStockItems.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No low stock items</p></td></tr>';
-        } else {
-            tbody.innerHTML = lowStockItems.map(item => {
-                const status = getStatus(item);
-                const statusClass = status === 'Critical' ? 'badge-critical' : 'badge-low';
-                return `<tr>
-                    <td><span class="item-name-text">${escapeHtml(item.name)}</span></td>
-                    <td class="text-right">${item.qtyWarehouse || 0}</td>
-                    <td class="text-right">${item.qtyBamban || 0}</td>
-                    <td class="text-right">${item.qtyCapas || 0}</td>
-                    <td><span class="badge-status ${statusClass}">${status}</span></td>
-                </tr>`;
-            }).join('');
+        if (tbody) {
+            if (lowStockItems.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>No low stock items</p></td></tr>';
+            } else {
+                tbody.innerHTML = lowStockItems.map(item => {
+                    const status = getStatus(item);
+                    const statusClass = status === 'Critical' ? 'badge-critical' : 'badge-low';
+                    return `<tr>
+                        <td><span class="item-name-text">${escapeHtml(item.name)}</span></td>
+                        <td class="text-right">${item.qtyWarehouse || 0}</td>
+                        <td class="text-right">${item.qtyBamban || 0}</td>
+                        <td class="text-right">${item.qtyCapas || 0}</td>
+                        <td><span class="badge-status ${statusClass}">${status}</span></td>
+                    </tr>`;
+                }).join('');
+            }
         }
 
         // Recent activity
         const recentTxs = transactions.slice(0, 12);
         const activityList = document.getElementById('dashActivityList');
-        if (recentTxs.length === 0) {
-            activityList.innerHTML = '<div class="empty-state"><p>No recent activity</p></div>';
-        } else {
-            activityList.innerHTML = recentTxs.map(tx => {
-                let iconBg, iconColor, actionText;
-                switch(tx.type) {
-                    case 'Receive':
-                        iconBg = 'rgba(76,175,80,0.1)'; iconColor = 'var(--success)';
-                        actionText = `Received <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong>`;
-                        break;
-                    case 'Transfer':
-                        iconBg = 'rgba(33,150,243,0.1)'; iconColor = 'var(--info)';
-                        actionText = `Transferred <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong> from ${tx.from} to ${tx.to}`;
-                        break;
-                    case 'Damage':
-                        iconBg = 'rgba(217,83,79,0.1)'; iconColor = 'var(--danger)';
-                        actionText = `Recorded <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> damaged <strong>${escapeHtml(tx.itemName)}</strong>`;
-                        break;
-                    case 'Expired':
-                        iconBg = 'rgba(244,168,37,0.1)'; iconColor = 'var(--warning)';
-                        actionText = `Recorded <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> expired <strong>${escapeHtml(tx.itemName)}</strong>`;
-                        break;
-                    case 'Adjustment':
-                        iconBg = 'rgba(196,106,43,0.1)'; iconColor = 'var(--primary)';
-                        actionText = `Adjusted <strong>${escapeHtml(tx.itemName)}</strong> by ${tx.qty}`;
-                        break;
-                    default:
-                        iconBg = 'rgba(104,119,91,0.1)'; iconColor = 'var(--secondary)';
-                        actionText = `${tx.type} <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong>`;
-                }
-                const icons = {
-                    Receive: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>',
-                    Transfer: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>',
-                    Damage: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
-                    Expired: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
-                    Adjustment: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>'
-                };
-                return `<div class="activity-item">
-                    <div class="activity-icon" style="background: ${iconBg}; color: ${iconColor};">${icons[tx.type] || icons.Adjustment}</div>
-                    <div class="activity-content">
-                        <div class="activity-text">${actionText}</div>
-                        <div class="activity-meta">
-                            <span>${formatDate(tx.date)}</span>
-                            <span>&bull;</span>
-                            <span>${tx.time || ''}</span>
-                            <span>&bull;</span>
-                            <span>${escapeHtml(tx.user || 'System')}</span>
+        if (activityList) {
+            if (recentTxs.length === 0) {
+                activityList.innerHTML = '<div class="empty-state"><p>No recent activity</p></div>';
+            } else {
+                activityList.innerHTML = recentTxs.map(tx => {
+                    let iconBg, iconColor, actionText;
+                    switch(tx.type) {
+                        case 'Receive':
+                            iconBg = 'rgba(76,175,80,0.1)'; iconColor = 'var(--success)';
+                            actionText = `Received <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong>`;
+                            break;
+                        case 'Transfer':
+                            iconBg = 'rgba(33,150,243,0.1)'; iconColor = 'var(--info)';
+                            actionText = `Transferred <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong> from ${tx.from} to ${tx.to}`;
+                            break;
+                        case 'Damage':
+                            iconBg = 'rgba(217,83,79,0.1)'; iconColor = 'var(--danger)';
+                            actionText = `Recorded <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> damaged <strong>${escapeHtml(tx.itemName)}</strong>`;
+                            break;
+                        case 'Expired':
+                            iconBg = 'rgba(244,168,37,0.1)'; iconColor = 'var(--warning)';
+                            actionText = `Recorded <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> expired <strong>${escapeHtml(tx.itemName)}</strong>`;
+                            break;
+                        case 'Adjustment':
+                            iconBg = 'rgba(196,106,43,0.1)'; iconColor = 'var(--primary)';
+                            actionText = `Adjusted <strong>${escapeHtml(tx.itemName)}</strong> by ${tx.qty}`;
+                            break;
+                        default:
+                            iconBg = 'rgba(104,119,91,0.1)'; iconColor = 'var(--secondary)';
+                            actionText = `${tx.type} <strong>${tx.qty} ${tx.unit || 'pcs'}</strong> of <strong>${escapeHtml(tx.itemName)}</strong>`;
+                    }
+                    const icons = {
+                        Receive: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>',
+                        Transfer: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>',
+                        Damage: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+                        Expired: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>',
+                        Adjustment: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>'
+                    };
+                    return `<div class="activity-item">
+                        <div class="activity-icon" style="background: ${iconBg}; color: ${iconColor};">${icons[tx.type] || icons.Adjustment}</div>
+                        <div class="activity-content">
+                            <div class="activity-text">${actionText}</div>
+                            <div class="activity-meta">
+                                <span>${formatDate(tx.date)}</span>
+                                <span>&bull;</span>
+                                <span>${tx.time || ''}</span>
+                                <span>&bull;</span>
+                                <span>${escapeHtml(tx.user || 'System')}</span>
+                            </div>
                         </div>
-                    </div>
-                </div>`;
-            }).join('');
+                    </div>`;
+                }).join('');
+            }
         }
 
         // Branch summary
@@ -708,30 +724,32 @@ const app = (function() {
 
         const settings = _settingsData;
         const whName = settings.warehouseName || 'Warehouse';
-
-        document.getElementById('dashBranchSummary').innerHTML = `
-            <div class="branch-sum-item">
-                <span class="branch-sum-name">${escapeHtml(whName)}</span>
-                <div class="branch-sum-stats">
-                    <span><strong>${wTotal}</strong> items</span>
-                    <span><strong>${formatCurrency(wVal)}</strong></span>
+        const branchSummaryEl = document.getElementById('dashBranchSummary');
+        if (branchSummaryEl) {
+            branchSummaryEl.innerHTML = `
+                <div class="branch-sum-item">
+                    <span class="branch-sum-name">${escapeHtml(whName)}</span>
+                    <div class="branch-sum-stats">
+                        <span><strong>${wTotal}</strong> items</span>
+                        <span><strong>${formatCurrency(wVal)}</strong></span>
+                    </div>
                 </div>
-            </div>
-            <div class="branch-sum-item">
-                <span class="branch-sum-name">Bamban Branch</span>
-                <div class="branch-sum-stats">
-                    <span><strong>${bTotal}</strong> items</span>
-                    <span><strong>${formatCurrency(bVal)}</strong></span>
+                <div class="branch-sum-item">
+                    <span class="branch-sum-name">Bamban Branch</span>
+                    <div class="branch-sum-stats">
+                        <span><strong>${bTotal}</strong> items</span>
+                        <span><strong>${formatCurrency(bVal)}</strong></span>
+                    </div>
                 </div>
-            </div>
-            <div class="branch-sum-item">
-                <span class="branch-sum-name">Capas Branch</span>
-                <div class="branch-sum-stats">
-                    <span><strong>${cTotal}</strong> items</span>
-                    <span><strong>${formatCurrency(cVal)}</strong></span>
+                <div class="branch-sum-item">
+                    <span class="branch-sum-name">Capas Branch</span>
+                    <div class="branch-sum-stats">
+                        <span><strong>${cTotal}</strong> items</span>
+                        <span><strong>${formatCurrency(cVal)}</strong></span>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
     }
 
     // ==========================================
@@ -748,18 +766,20 @@ const app = (function() {
         const transactions = _transactionsData;
         const receives = transactions.filter(t => t.type === 'Receive').slice(0, 10);
         const tbody = document.getElementById('recentDeliveriesTable');
-        if (receives.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>No recent deliveries</p></td></tr>';
-        } else {
-            tbody.innerHTML = receives.map(tx => `<tr>
-                <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
-                <td>${formatDate(tx.date)}</td>
-                <td>${escapeHtml(tx.supplierName || '-')}</td>
-                <td>${escapeHtml(tx.itemName)}</td>
-                <td class="text-right">${tx.qty}</td>
-                <td>${escapeHtml(tx.to || '-')}</td>
-                <td>${escapeHtml(tx.user || 'System')}</td>
-            </tr>`).join('');
+        if (tbody) {
+            if (receives.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>No recent deliveries</p></td></tr>';
+            } else {
+                tbody.innerHTML = receives.map(tx => `<tr>
+                    <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
+                    <td>${formatDate(tx.date)}</td>
+                    <td>${escapeHtml(tx.supplierName || '-')}</td>
+                    <td>${escapeHtml(tx.itemName)}</td>
+                    <td class="text-right">${tx.qty}</td>
+                    <td>${escapeHtml(tx.to || '-')}</td>
+                    <td>${escapeHtml(tx.user || 'System')}</td>
+                </tr>`).join('');
+            }
         }
     }
 
@@ -786,19 +806,21 @@ const app = (function() {
         if (dateFilter) transactions = transactions.filter(t => t.date === dateFilter);
 
         const tbody = document.getElementById('transferHistoryTable');
-        if (transactions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>No transfer records</p></td></tr>';
-        } else {
-            tbody.innerHTML = transactions.slice(0, 50).map(tx => `<tr>
-                <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
-                <td>${formatDate(tx.date)}</td>
-                <td>${escapeHtml(tx.from)}</td>
-                <td>${escapeHtml(tx.to)}</td>
-                <td>${escapeHtml(tx.itemName)}</td>
-                <td class="text-right">${tx.qty}</td>
-                <td><span class="badge-status badge-completed">Completed</span></td>
-                <td>${escapeHtml(tx.user || 'System')}</td>
-            </tr>`).join('');
+        if (tbody) {
+            if (transactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><p>No transfer records</p></td></tr>';
+            } else {
+                tbody.innerHTML = transactions.slice(0, 50).map(tx => `<tr>
+                    <td><span class="item-sku">${escapeHtml(tx.refNum)}</span></td>
+                    <td>${formatDate(tx.date)}</td>
+                    <td>${escapeHtml(tx.from)}</td>
+                    <td>${escapeHtml(tx.to)}</td>
+                    <td>${escapeHtml(tx.itemName)}</td>
+                    <td class="text-right">${tx.qty}</td>
+                    <td><span class="badge-status badge-completed">Completed</span></td>
+                    <td>${escapeHtml(tx.user || 'System')}</td>
+                </tr>`).join('');
+            }
         }
     }
 
@@ -817,66 +839,72 @@ const app = (function() {
             { key: 'Capas', name: 'Capas Branch', color: '#5A4636', qtyKey: 'qtyCapas' }
         ];
 
-        document.getElementById('branchesGrid').innerHTML = branches.map(b => {
-            let totalItems = 0, totalQty = 0, totalValue = 0, lowStock = 0;
-            items.forEach(item => {
-                const qty = item[b.qtyKey] || 0;
-                if (qty > 0) totalItems++;
-                totalQty += qty;
-                totalValue += qty * (item.cost || 0);
-                if (qty <= (item.reorderLevel || settings.reorderLevel || 10)) lowStock++;
-            });
+        const branchesGridEl = document.getElementById('branchesGrid');
+        if (branchesGridEl) {
+            branchesGridEl.innerHTML = branches.map(b => {
+                let totalItems = 0, totalQty = 0, totalValue = 0, lowStock = 0;
+                items.forEach(item => {
+                    const qty = item[b.qtyKey] || 0;
+                    if (qty > 0) totalItems++;
+                    totalQty += qty;
+                    totalValue += qty * (item.cost || 0);
+                    if (qty <= (item.reorderLevel || settings.reorderLevel || 10)) lowStock++;
+                });
 
-            const recentTxs = transactions.filter(t =>
-                (t.from === b.key || t.to === b.key)
-            ).slice(0, 5);
+                const recentTxs = transactions.filter(t =>
+                    (t.from === b.key || t.to === b.key)
+                ).slice(0, 5);
 
-            return `<div class="branch-card">
-                <div class="branch-card-header">
-                    <div class="branch-card-icon" style="background: ${b.color}15; color: ${b.color};">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                return `<div class="branch-card">
+                    <div class="branch-card-header">
+                        <div class="branch-card-icon" style="background: ${b.color}15; color: ${b.color};">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                        </div>
+                        <div>
+                            <div class="branch-card-title">${b.name}</div>
+                            <div class="branch-card-subtitle">${totalItems} items in stock</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="branch-card-title">${b.name}</div>
-                        <div class="branch-card-subtitle">${totalItems} items in stock</div>
+                    <div class="branch-card-body">
+                        <div class="branch-stat-row">
+                            <span class="branch-stat-label">Total Quantity</span>
+                            <span class="branch-stat-value">${totalQty.toLocaleString()}</span>
+                        </div>
+                        <div class="branch-stat-row">
+                            <span class="branch-stat-label">Inventory Value</span>
+                            <span class="branch-stat-value">${formatCurrency(totalValue)}</span>
+                        </div>
+                        <div class="branch-stat-row">
+                            <span class="branch-stat-label">Low Stock Items</span>
+                            <span class="branch-stat-value" style="color: ${lowStock > 0 ? 'var(--danger)' : 'var(--success)'}">${lowStock}</span>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light);">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Recent Transactions</div>
+                            ${recentTxs.length === 0 ? '<span style="font-size: 12px; color: var(--text-muted);">No recent activity</span>' :
+                                recentTxs.map(tx => `<div style="font-size: 12px; color: var(--text); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                                    <span>${escapeHtml(tx.itemName)} - ${tx.qty} ${tx.unit || ''}</span>
+                                    <span style="color: var(--text-muted);">${formatDate(tx.date)}</span>
+                                </div>`).join('')}
+                        </div>
                     </div>
-                </div>
-                <div class="branch-card-body">
-                    <div class="branch-stat-row">
-                        <span class="branch-stat-label">Total Quantity</span>
-                        <span class="branch-stat-value">${totalQty.toLocaleString()}</span>
-                    </div>
-                    <div class="branch-stat-row">
-                        <span class="branch-stat-label">Inventory Value</span>
-                        <span class="branch-stat-value">${formatCurrency(totalValue)}</span>
-                    </div>
-                    <div class="branch-stat-row">
-                        <span class="branch-stat-label">Low Stock Items</span>
-                        <span class="branch-stat-value" style="color: ${lowStock > 0 ? 'var(--danger)' : 'var(--success)'}">${lowStock}</span>
-                    </div>
-                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light);">
-                        <div style="font-size: 11px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Recent Transactions</div>
-                        ${recentTxs.length === 0 ? '<span style="font-size: 12px; color: var(--text-muted);">No recent activity</span>' :
-                            recentTxs.map(tx => `<div style="font-size: 12px; color: var(--text); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                                <span>${escapeHtml(tx.itemName)} - ${tx.qty} ${tx.unit || ''}</span>
-                                <span style="color: var(--text-muted);">${formatDate(tx.date)}</span>
-                            </div>`).join('')}
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
+                </div>`;
+            }).join('');
+        }
 
         // Branch comparison table (no SKU)
-        document.getElementById('branchComparisonTable').innerHTML = items.map(item => {
-            const total = (item.qtyWarehouse || 0) + (item.qtyBamban || 0) + (item.qtyCapas || 0);
-            return `<tr>
-                <td><strong>${escapeHtml(item.name)}</strong></td>
-                <td class="text-right">${item.qtyWarehouse || 0}</td>
-                <td class="text-right">${item.qtyBamban || 0}</td>
-                <td class="text-right">${item.qtyCapas || 0}</td>
-                <td class="text-right"><strong>${total}</strong></td>
-            </tr>`;
-        }).join('');
+        const compTable = document.getElementById('branchComparisonTable');
+        if (compTable) {
+            compTable.innerHTML = items.map(item => {
+                const total = (item.qtyWarehouse || 0) + (item.qtyBamban || 0) + (item.qtyCapas || 0);
+                return `<tr>
+                    <td><strong>${escapeHtml(item.name)}</strong></td>
+                    <td class="text-right">${item.qtyWarehouse || 0}</td>
+                    <td class="text-right">${item.qtyBamban || 0}</td>
+                    <td class="text-right">${item.qtyCapas || 0}</td>
+                    <td class="text-right"><strong>${total}</strong></td>
+                </tr>`;
+            }).join('');
+        }
     }
 
     // ==========================================
@@ -890,6 +918,7 @@ const app = (function() {
 
         DB.users.getAll(users => {
             const container = document.getElementById('usersTableBody');
+            if (!container) return;
             if (!users || users.length === 0) {
                 container.innerHTML = '<tr><td colspan="6" class="empty-state"><p>No users found</p></td></tr>';
                 return;
@@ -908,7 +937,7 @@ const app = (function() {
                     <td>
                         <div class="table-actions">
                             ${!isCurrentUser ? `
-                            <select class="filter-select" onchange="app.changeUserRole('${u.uid}', this.value)" style="min-width:100px;font-size:12px;">
+                            <select class="filter-select" onchange="app.changeUserRole('${u.uid}', this.value)" style="min-width:100px;font-size:12px;margin-bottom:0;">
                                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
                                 <option value="staff" ${u.role === 'staff' ? 'selected' : ''}>Staff</option>
                                 <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer</option>
@@ -1037,6 +1066,7 @@ const app = (function() {
         return sym + parseFloat(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    // Explicitly using string representation here to bypass unnecessary LaTeX syntax rules for regular formatting
     function todayStr() {
         return new Date().toISOString().split('T')[0];
     }
@@ -1087,6 +1117,7 @@ const app = (function() {
 
     function showToast(message, type) {
         const container = document.getElementById('toastContainer');
+        if (!container) return;
         const icons = {
             success: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
             error: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
@@ -1117,11 +1148,12 @@ const app = (function() {
         const overlay = document.getElementById('loadingOverlay');
         const msgEl = document.getElementById('loadingMessage');
         if (msgEl && message) msgEl.textContent = message;
-        overlay.classList.add('active');
+        if (overlay) overlay.classList.add('active');
     }
 
     function hideLoading() {
-        document.getElementById('loadingOverlay').classList.remove('active');
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.classList.remove('active');
     }
 
     function updateRefNumbers() {
@@ -1139,9 +1171,7 @@ const app = (function() {
     const THEME_STORAGE_KEY = 'akasya_theme_preference';
 
     const THEME_ICONS = {
-        // Sun icon - shown when currently in light mode (click to go dark)
         light: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>',
-        // Moon icon - shown when currently in dark mode (click to go light)
         dark: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'
     };
 
@@ -1153,11 +1183,6 @@ const app = (function() {
         try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch (e) { /* private mode etc - ignore */ }
     }
 
-    /**
-     * Applies the given theme to the page and keeps the topbar toggle
-     * button's icon/label in sync. Does NOT persist anything - callers
-     * decide whether to also call storeThemePreference().
-     */
     function applyTheme(theme) {
         const normalized = theme === 'dark' ? 'dark' : 'light';
         if (normalized === 'dark') {
@@ -1174,24 +1199,12 @@ const app = (function() {
         }
     }
 
-    /**
-     * Sets the user's personal theme preference (persisted per-browser) and
-     * applies it immediately. Used both by the topbar toggle button and by
-     * Settings > Save (so an explicit save also updates what the toggle
-     * shows for that admin/staff member right away).
-     */
     function setThemePreference(theme) {
         const normalized = theme === 'dark' ? 'dark' : 'light';
         storeThemePreference(normalized);
         applyTheme(normalized);
     }
 
-    /**
-     * Flips between light and dark. This is the handler for the topbar
-     * sun/moon button - it works for every role (unlike the business-wide
-     * default in Settings, which only admins/staff with canEditSettings can
-     * change) since it's just a personal, per-browser preference.
-     */
     function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
         setThemePreference(current === 'dark' ? 'light' : 'dark');

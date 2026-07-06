@@ -286,23 +286,12 @@ const app = (function() {
                 if (firebaseUser) {
                     // User is logged in - verify they're active
                     const profile = Auth.getProfile();
-                    if (profile && profile.isActive === false) {
-                        showLoginScreen();
-                        showToast('Your account has been deactivated. Contact an admin.', 'error');
-                        Auth.logout();
-                        return;
-                    }
-                    setupApp();
-                } else {
-                    // Not logged in - check if first-time setup needed
-                    checkFirstTimeSetup();
-                }
-            }).catch(err => {
-                console.error("[Akasya] Auth init error:", err);
-                showLoginScreen();
-            });
-        }, 500);
-    }
+                    if (!profile || profile.isActive !== true) {
+    console.log("Redirecting to login...");
+    Auth.logout();
+    showLoginScreen();
+    return;
+}
 
     function checkFirstTimeSetup() {
         Auth.checkAdminExists().then(adminExists => {
